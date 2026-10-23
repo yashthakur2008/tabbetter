@@ -1,39 +1,94 @@
-export const clean = (s) =>
-  String(s || "")
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&#(\d+);/g, (_, n) =>
-      String.fromCodePoint(Math.min(Number(n), 1114111)),
-    )
-    .replace(/&#x([\da-f]+);/gi, (_, n) =>
-      String.fromCodePoint(Math.min(parseInt(n, 16), 1114111)),
-    )
-    .replace(
-      /&(ndash|mdash|lsquo|rsquo|ldquo|rdquo|hellip|middot|bull|copy|reg);/g,
-      (_, k) =>
-        ({
-          ndash: "–",
-          mdash: "—",
-          lsquo: "‘",
-          rsquo: "’",
-          ldquo: "“",
-          rdquo: "”",
-          hellip: "…",
-          middot: "·",
-          bull: "•",
-          copy: "©",
-          reg: "®",
-        })[k],
-    )
-    .replace(/&amp;/g, "&")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/\s+/g, " ")
-    .trim();
+// Convert markup into plain text, never sanitized HTML. The interface must
+// escape these values before inserting them into any markup context.
+const entities = {
+  amp: "&",
+  nbsp: " ",
+  quot: '"',
+  apos: "'",
+  lt: "<",
+  gt: ">",
+  ndash: "–",
+  mdash: "—",
+  lsquo: "‘",
+  rsquo: "’",
+  ldquo: "“",
+  rdquo: "”",
+  hellip: "…",
+  middot: "·",
+  bull: "•",
+  copy: "©",
+  reg: "®",
+};
+function decodeEntitiesOnce(text) {
+  return text.replace(
+    /&(?:#(\d+)|#x([\da-f]+)|([a-z][a-z0-9]+));/gi,
+    (whole, decimal, hex, named) => {
+      if (named) return entities[named] ?? whole;
+      const cp = decimal ? Number(decimal) : parseInt(hex, 16);
+      return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff)
+        ? String.fromCodePoint(cp)
+        : "�";
+    },
+  );
+}
+function tagEnd(html, start) {
+  let quote = null;
+  for (let i = start; i < html.length; i++) {
+    const c = html[i];
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === ">") return i;
+  }
+  return -1;
+}
+export function clean(value) {
+  const html = String(value ?? ""),
+    lower = html.toLowerCase();
+  let out = "",
+    i = 0,
+    raw = null;
+  while (i < html.length) {
+    if (raw) {
+      let close = lower.indexOf("</" + raw, i);
+      while (close >= 0 && !/[\s/>]/.test(lower[close + raw.length + 2] || ">"))
+        close = lower.indexOf("</" + raw, close + 2);
+      if (close < 0) break;
+      const end = tagEnd(html, close + 2);
+      if (end < 0) break;
+      i = end + 1;
+      raw = null;
+      out += " ";
+      continue;
+    }
+    if (html.startsWith("<!--", i)) {
+      const end = html.indexOf("-->", i + 4);
+      if (end < 0) break;
+      i = end + 3;
+      out += " ";
+      continue;
+    }
+    if (html[i] === "<") {
+      const tag = html.slice(i).match(/^<(\/?)([a-z][a-z0-9:-]*)(?=[\s/>])/i);
+      const declaration = html[i + 1] === "!" || html[i + 1] === "?";
+      if (tag || declaration) {
+        const end = tagEnd(html, i + 1);
+        if (end < 0) break;
+        if (
+          tag &&
+          !tag[1] &&
+          ["script", "style"].includes(tag[2].toLowerCase())
+        )
+          raw = tag[2].toLowerCase();
+        i = end + 1;
+        out += " ";
+        continue;
+      }
+    }
+    out += html[i++];
+  }
+  return decodeEntitiesOnce(out).replace(/\s+/g, " ").trim();
+}
 export function linksIn(html) {
   return [
     ...html.matchAll(
