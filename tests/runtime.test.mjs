@@ -41,3 +41,17 @@ test("invalid identifiers fail before an upstream request", async () => {
   );
   assert.equal(response.status, 400);
 });
+
+test("compiled application embeds browser assets and founder attribution", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/"),
+    {},
+    {},
+  );
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Yash Thakur — Co-founder/);
+  assert.match(html, /nonprofit initiative/);
+  assert.ok(!html.includes('href="/styles.css"'));
+  assert.ok(!html.includes('src="/app.js"'));
+});
