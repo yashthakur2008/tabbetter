@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  clean,
   parseCalendar,
   parseCircuits,
   parseInvitation,
@@ -150,4 +151,22 @@ test("missing publication sections stay empty", () => {
   const d = normalizeExport({ id: 12, public: "true", name: "Empty" }, "12");
   assert.deepEqual(d.rounds, []);
   assert.deepEqual(d.entries, []);
+});
+
+test("text extraction decodes entities only once", () => {
+  assert.equal(clean("&amp;lt;script&amp;gt;"), "&lt;script&gt;");
+  assert.equal(clean("&#38;amp;"), "&amp;");
+});
+test("text extraction skips raw script and style content", () => {
+  assert.equal(
+    clean("<SCRIPT>x</SCRIPT \t bar><style>bad</style >safe"),
+    "safe",
+  );
+  assert.equal(clean("<script><script>nested</script>after"), "after");
+});
+test("text extraction preserves comparisons and quoted tag boundaries", () => {
+  assert.equal(clean('2 < 3 <b title=">">bold</b>'), "2 < 3 bold");
+});
+test("invalid numeric entities do not crash source parsing", () => {
+  assert.equal(clean("&#0; &#xD800; &#x110000;"), "� � �");
 });
