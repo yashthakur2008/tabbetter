@@ -17,6 +17,8 @@ The existing prototype is being introduced through five reviewable pull requests
 
 - Replaced the legacy HTML script-tag matcher with direct standalone JavaScript syntax checks after actual CodeQL findings.
 
+- Converted source markup to plain text without recursive tag replacement or repeated entity decoding, following CodeQL findings.
+
 ### Pending integrations
 
 - CodeRabbit repository activation and completed review output.

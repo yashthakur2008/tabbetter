@@ -46,7 +46,7 @@ Browser source was formatted with Prettier 3.9.10 during import. Runtime tests v
 - **GitHub Copilot:** a review may be requested if available on the owner's account. A request is not evidence that a review happened.
 - **Human review:** required before merge under the main-branch policy. Automated analysis is supporting evidence, not a fabricated human approval.
 
-CodeQL flagged the legacy HTML script-tag matcher in the syntax checker. After splitting browser code into `web/app.js`, the final fix removed ad-hoc HTML parsing and validates every tracked JavaScript file directly with Node. Actual review fixes were propagated through the dependent branches.
+CodeQL flagged the legacy HTML script-tag matcher in the syntax checker. After splitting browser code into `web/app.js`, the final fix removed ad-hoc HTML parsing and validates every tracked JavaScript file directly with Node. CodeQL also identified recursive-replacement and entity-decoding issues in source text conversion. The converter now scans tags without repeated stripping and decodes entities once; dedicated malformed-tag and Unicode regression tests cover these cases. Actual review fixes were propagated through the dependent branches.
 
 ## Follow-up work
 
