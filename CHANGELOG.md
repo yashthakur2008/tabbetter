@@ -19,6 +19,8 @@ The existing prototype is being introduced through five reviewable pull requests
 
 - Converted source markup to plain text without recursive tag replacement or repeated entity decoding, following CodeQL findings.
 
+- Escaped route-derived labels at their HTML insertion boundaries after CodeQL XSS findings.
+
 ### Pending integrations
 
 - CodeRabbit repository activation and completed review output.
