@@ -46,7 +46,7 @@ Browser source was formatted with Prettier 3.9.10 during import. Runtime tests v
 - **GitHub Copilot:** a review may be requested if available on the owner's account. A request is not evidence that a review happened.
 - **Human review:** required before merge under the main-branch policy. Automated analysis is supporting evidence, not a fabricated human approval.
 
-The first CodeQL scan flagged a case-sensitive script-tag matcher in the syntax checker. A follow-up commit made the match case-insensitive and propagated the actual fix through the dependent branches.
+CodeQL flagged the legacy HTML script-tag matcher in the syntax checker. After splitting browser code into `web/app.js`, the final fix removed ad-hoc HTML parsing and validates every tracked JavaScript file directly with Node. Actual review fixes were propagated through the dependent branches.
 
 ## Follow-up work
 

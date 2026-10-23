@@ -15,7 +15,7 @@ The existing prototype is being introduced through five reviewable pull requests
 
 ### Review fixes
 
-- Made inline script syntax checks case-insensitive after an actual CodeQL finding.
+- Replaced the legacy HTML script-tag matcher with direct standalone JavaScript syntax checks after actual CodeQL findings.
 
 ### Pending integrations
 
