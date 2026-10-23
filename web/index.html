@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>TabBetter — Your tournament, clearly.</title>
+    <meta
+      name="description"
+      content="Explore debate tournaments, pairings, entries and judges in one clear workspace."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a href="#discover" class="brand" aria-label="TabBetter home"
+        ><img src="/logo.png" alt="TabBetter"
+      /></a>
+      <div class="tiny">Explore</div>
+      <nav class="nav" aria-label="Main navigation">
+        <button data-nav="discover"><i>◫</i><span>Tournaments</span></button
+        ><button data-nav="saved"><i>☆</i><span>Saved</span></button
+        ><button data-nav="circuits"><i>◎</i><span>Circuits</span></button
+        ><button data-nav="results"><i>♜</i><span>Results</span></button
+        ><button data-nav="judging"><i>▤</i><span>Judging</span></button
+        ><button data-nav="paradigms"><i>⌕</i><span>Paradigms</span></button>
+      </nav>
+      <div class="tiny">Your Tabroom</div>
+      <nav class="nav account-nav">
+        <button data-nav="account">
+          <i>♧</i><span>School & registration</span></button
+        ><button data-nav="help"><i>ⓘ</i><span>Help & resources</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="source-note">
+          <span class="status-dot"></span>Built around your round.<br />Public
+          data from Tabroom.<br /><a href="#about" style="color: #56866c"
+            >About TabBetter ↗</a
+          >
+        </div>
+        <a
+          href="https://www.tabroom.com/user/home.mhtml"
+          target="_blank"
+          rel="noopener"
+          class="profile"
+          ><div class="avatar">↗</div>
+          <div>
+            <b>Open my Tabroom</b>
+            <div style="font-size: 10px; color: #92a097; margin-top: 4px">
+              Account, ballots & registration
+            </div>
+          </div></a
+        >
+      </div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <a class="brand" href="#discover"
+          ><span class="mark">›</span>TabBetter.</a
+        >
+        <div class="breadcrumb">
+          Workspace <span style="padding: 0 12px">/</span
+          ><strong id="crumb">Tournaments</strong>
+        </div>
+        <div class="top-actions">
+          <span class="pill">EARLY ACCESS</span
+          ><a
+            class="btn"
+            href="https://www.tabroom.com/user/home.mhtml"
+            target="_blank"
+            rel="noopener"
+            >My Tabroom ↗</a
+          >
+        </div>
+      </header>
+      <div class="content" id="app">
+        <div class="loading">Connecting to Tabroom…</div>
+      </div>
+    </main>
+    <div class="toast" role="status" aria-live="polite"></div>
+    <dialog id="jump">
+      <h2>Open a tournament</h2>
+      <p>Paste a Tabroom tournament link or enter its ID.</p>
+      <form id="jump-form">
+        <label for="jump-url" class="smalltext">Tournament URL or ID</label
+        ><input
+          id="jump-url"
+          required
+          placeholder="https://www.tabroom.com/…?tourn_id=41209"
+        />
+        <div style="display: flex; justify-content: flex-end; gap: 10px">
+          <button type="button" class="btn" id="jump-cancel">Cancel</button
+          ><button class="btn dark">Open tournament</button>
+        </div>
+      </form>
+    </dialog>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
