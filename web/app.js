@@ -791,7 +791,7 @@ function renderDetail() {
   } else if (sub === "entries" || sub === "judges") {
     target.innerHTML =
       '<div class="entry-search"><input class="search" id="detail-search" aria-label="Search ' +
-      sub +
+      esc(sub) +
       '" placeholder="' +
       (sub === "entries"
         ? "Search entries, codes or schools…"
@@ -799,7 +799,7 @@ function renderDetail() {
       '" value="' +
       attr(detailFilter) +
       '"><select id="detail-event" aria-label="Filter ' +
-      sub +
+      esc(sub) +
       '">' +
       opts(
         sub === "entries"
@@ -888,7 +888,7 @@ function drawPeople(sub) {
     '<p class="smalltext">' +
     rows.length +
     " " +
-    sub +
+    esc(sub) +
     (rows.length > 300 ? " · Showing first 300; narrow your search." : "") +
     "</p>" +
     (rows.length
@@ -914,7 +914,7 @@ function drawPeople(sub) {
           )
           .join("") +
         "</tbody></table></div>"
-      : '<div class="card empty">No matching ' + sub + ".</div>");
+      : '<div class="card empty">No matching ' + esc(sub) + ".</div>");
 }
 function drawRounds(sub) {
   const d = tournament,
