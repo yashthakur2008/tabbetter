@@ -26,7 +26,9 @@ A local OAuth login (`npx wrangler login`) or `CLOUDFLARE_API_TOKEN` is required
 `.github/workflows/deploy.yml` runs the same checks as `Quality`, then publishes on every push to `main` in the `production` environment. It needs two repository secrets:
 
 - `CLOUDFLARE_API_TOKEN`: token with **Workers Scripts: Edit**, **Workers Routes: Edit**, **Account Settings: Read**, **Zone: Read** and **SSL and Certificates: Edit** for the `tabbetter.com` zone.
-- `CLOUDFLARE_ACCOUNT_ID`: `8d8d8a5a39a42bd0087453f6bc48e375`.
+- `CLOUDFLARE_ACCOUNT_ID`: `8d8d8a5a39a42bd0087453f6bc48e375` (already set).
+
+The token must be created in **My Profile → API Tokens** in the dashboard; a Wrangler OAuth session cannot mint it. Until the token secret exists, the workflow runs every check and skips only the publish step with a warning, so `main` never fails for a missing credential.
 
 ## Connecting tabbetter.com
 
