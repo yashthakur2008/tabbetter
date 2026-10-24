@@ -1,0 +1,11 @@
+name = "tabbetter"
+main = "dist/server/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Apex and www are served as custom domains once the tabbetter.com zone is active
+# on this Cloudflare account. See docs/deployment.md before uncommenting.
+# routes = [
+#   { pattern = "tabbetter.com", custom_domain = true },
+#   { pattern = "www.tabbetter.com", custom_domain = true },
+# ]

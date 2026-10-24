@@ -7,3 +7,4 @@ worker/
 !.env.example
 *.tar.gz
 .DS_Store
+.wrangler/
