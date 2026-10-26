@@ -39,4 +39,4 @@ Every displayed dataset carries its source and retrieval timestamp. A public exp
 
 The build embeds assets so the Worker has no runtime package dependencies. Generated bundles and `.openai/` identity are ignored. Without a local production manifest, a neutral metadata file is generated only inside `dist/` for local validation.
 
-The `Quality` and `Security` workflows validate source. The `Deploy` workflow re-runs those checks and publishes `dist/server/index.js` to the `tabbetter` Cloudflare Worker on every push to `main`, using repository secrets only. Apex and `www` custom domains activate once the `tabbetter.com` zone is on the same Cloudflare account; see [Deployment](deployment.md) and issue #7.
+The `Quality` and `Security` workflows validate source. The proposed `Deploy` workflow runs repository, parser, build, runtime and artifact checks before publishing `dist/server/index.js` to the `tabbetter` Cloudflare Worker. CodeQL remains a separate workflow. Production apex and `www` custom domains are live. Automatic deployment still requires PR #14 approval/merge and the API-token secret; see [Deployment](deployment.md).

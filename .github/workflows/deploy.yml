@@ -42,7 +42,7 @@ jobs:
           fi
       - name: Publish to Cloudflare
         if: steps.credentials.outputs.ready == 'true'
-        run: npx --yes wrangler@4 deploy
+        run: npx --yes wrangler@4.152.0 deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

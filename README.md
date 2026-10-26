@@ -57,4 +57,4 @@ Requires Node.js 22 or newer. No runtime dependencies or package installation ar
 | Hosting, domain and release process           | [Deployment](docs/deployment.md)                             |
 | Planned improvements                          | [Issues](https://github.com/yashthakur2008/tabbetter/issues) |
 
-Pushes to `main` build, test and publish the Worker to Cloudflare, currently served at <https://tabbetter.stepsense-dahacks.workers.dev>. Connecting the `tabbetter.com` apex and `www` custom domains requires moving the domain's DNS to the same Cloudflare account; the steps and verification are in [Deployment](docs/deployment.md) and tracked in issue #7.
+TabBetter is live at <https://tabbetter.com> and <https://www.tabbetter.com>, served by a Cloudflare Worker. Automatic deployment from `main` requires merging the deployment workflow and configuring its API-token secret. See [Deployment](docs/deployment.md) for verified launch status and remaining setup.
