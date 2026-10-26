@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { normalizeExport } from '../src/data.mjs';
 
-const raw = () => ({ id: 1, public: true, schools: [{ id: 9, name: 'School', entries: [{id: 11, event: 2, code: 'AB', students: [{id: 22, first: 'Ada', last: 'Bee'}]}]}], categories: [{ events: [{id: 2, name: 'PF', result_sets: [
+const raw = () => ({ id: 1, public: true, schools: [{ id: 9, name: 'School', students: [{id: 22, first: 'Ada', last: 'Bee'}], entries: [{id: 11, event: 2, code: 'AB', students: [22]}]}], categories: [{ events: [{id: 2, name: 'PF', result_sets: [
   {published: 1, tag: 'speaker', entity: 'student', label: 'Speakers <Open>', results: [{rank: 1, place: '1-T', student: 22, entry: 11, round: 4}]},
   {published: 1, tag: 'seed', label: 'Prelim Seeds', results: [{rank: 2, entry: 11}]},
   {published: 1, tag: 'final', label: 'Final Places', results: [{rank: 3, entry: 11}]},
@@ -99,4 +99,29 @@ test('pairings use the event and round selection without showing standings or re
   const html = a.node('#round-list').innerHTML;
   assert.match(html, /PF · Round 1/);
   assert.doesNotMatch(html, /LD · Round 1|Speaker Awards|entry-result-win/);
+});
+
+test('school student identity placeholders are not published names', () => {
+  for (const student of [{id:22,first:22,last:22}, {id:22,first:'22',last:'22'}, {id:22}]) {
+    const source = raw(); source.schools[0].students = [student];
+    const normalized = normalizeExport(source, '1');
+    assert.equal(normalized.resultSets[0].results[0].studentName, '');
+    const a = app(); a.context.fixture = normalized; a.run('tournament=fixture; drawRounds("results")');
+    assert.match(a.node('#round-list').innerHTML, /Speaker name not published/);
+    assert.doesNotMatch(a.node('#round-list').innerHTML, /22 22/);
+  }
+});
+test('cache-only LEFT JOIN placeholder rows are empty standings, not phantom competitors', () => {
+  const source = raw();
+  source.categories[0].events[0].result_sets = [{published:1,tag:'table',label:'Prelims Table',results:[{values:[{}]}]}];
+  const normalized = normalizeExport(source, '1');
+  assert.equal(normalized.resultSets[0].results.length, 0);
+  const a = app(); a.context.fixture = normalized; a.run('tournament=fixture; drawRounds("results")');
+  assert.match(a.node('#round-list').innerHTML, /Rankings not published in this export/);
+  assert.doesNotMatch(a.node('#round-list').innerHTML, /Entry not published/);
+});
+test('partial published standing rows are retained when rank or identity is present', () => {
+  const source = raw();
+  source.categories[0].events[0].result_sets[0].results = [{rank:1}, {entry:11}, {student:22}, {school:9}, {place:'Finalist'}];
+  assert.equal(normalizeExport(source, '1').resultSets[0].results.length, 5);
 });
