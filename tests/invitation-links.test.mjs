@@ -111,3 +111,15 @@ test('malformed or unclosed raw content cannot supply fake links', () => {
     assert.deepEqual(inv.links, []);
   }
 });
+
+test('invitation links are visually identifiable rather than looking like plain text', () => {
+  const html = render(parse('<p>Read <a href="https://example.org/map">Campus Map</a>.</p>'));
+  assert.match(html, /<a href="https:\/\/example.org\/map"[^>]*>Campus Map<\/a>/);
+  const css = fs.readFileSync('web/styles.css', 'utf8');
+  const rule = css.slice(css.indexOf('.prose a {'), css.indexOf('}', css.indexOf('.prose a {')));
+  assert.ok(rule, 'expected a .prose a rule styling invitation links');
+  assert.match(rule, /color: var\(--accent\)/);
+  assert.match(rule, /text-decoration: underline/);
+  const after = css.slice(css.indexOf('.prose a::after {'), css.indexOf('}', css.indexOf('.prose a::after {')));
+  assert.match(after, /content: "(\u2197|\\2197)"/);
+});
