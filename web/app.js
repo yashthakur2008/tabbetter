@@ -41,6 +41,7 @@ let saved = readSaved(),
   detailFilter = "",
   detailEvent = "",
   roundFilter = "",
+  roundEvent = "",
   peopleSearch = "";
 const filter = {
   q: "",
@@ -124,7 +125,7 @@ function formatDate(s, tz) {
   }
 }
 async function api(path) {
-  const r = await fetch(path + (path.includes("?") ? "&" : "?") + "schema=3");
+  const r = await fetch(path + (path.includes("?") ? "&" : "?") + "schema=4");
   const d = await r.json();
   if (!r.ok) throw Error(d.error || "Source unavailable");
   return d;
@@ -670,10 +671,11 @@ async function loadTournament(id) {
     return;
   }
   loading();
-  detailFilter = "";
-  detailEvent = "";
-  roundFilter = "";
   if (lastId !== id) {
+    detailFilter = "";
+    detailEvent = "";
+    roundFilter = "";
+    roundEvent = "";
     tournament = null;
     invitation = null;
     lastId = id;
@@ -693,6 +695,20 @@ async function loadTournament(id) {
     return;
   }
   renderDetail();
+}
+function renderInvitationParagraph(text, segments) {
+  if (!Array.isArray(segments)) return "<p>" + esc(text) + "</p>";
+  return "<p>" + segments.map((segment) => {
+    const label = esc(segment?.text);
+    try {
+      const url = new URL(segment?.url);
+      if (/^https?:$/.test(url.protocol))
+        return '<a href="' + attr(url.href) + '" target="_blank" rel="noopener noreferrer">' + label + "</a>";
+    } catch {
+      // Malformed or legacy link data is rendered as text, never raw markup.
+    }
+    return label;
+  }).join("") + "</p>";
 }
 function renderDetail() {
   const { id, sub, event } = route();
@@ -790,7 +806,7 @@ function renderDetail() {
         : "") +
       (inv?.paragraphs.length
         ? '<div class="card prose">' +
-          inv.paragraphs.map((p) => "<p>" + esc(p) + "</p>").join("") +
+          inv.paragraphs.map((p, i) => renderInvitationParagraph(p, inv.paragraphSegments?.[i])).join("") +
           "</div>"
         : '<div class="card empty">The invitation text is not available in this view. ' +
           external(href(id), "Read the official invitation") +
@@ -867,16 +883,21 @@ function renderDetail() {
     };
     drawPeople(sub);
   } else if (sub === "pairings" || sub === "results") {
+    reconcileRoundFilters();
     target.innerHTML =
-      '<div class="entry-search"><input class="search" id="round-search" aria-label="Search rounds" placeholder="Search entry, judge or room…" value="' +
-      attr(detailFilter) +
-      '"><select id="round-filter" aria-label="Round">' +
-      opts(
-        d.rounds.map((r) => ({ value: r.id, label: r.event + " · " + r.name })),
-        roundFilter,
-        "All published rounds",
-      ) +
-      '</select></div><div id="round-list"></div>';
+      '<div class="round-filters"><label for="round-event">Event<select id="round-event">' +
+      opts(d.events.map((e) => ({ value: e.id, label: e.name })), roundEvent, "All events") +
+      '</select></label><label for="round-filter">Round<select id="round-filter" ' +
+      (!roundEvent ? 'disabled' : '') + '>' +
+      opts(d.rounds.filter((r) => r.eventId === roundEvent).map((r) => ({ value: r.id, label: r.name })),
+        roundFilter, roundEvent ? "All published rounds" : "Choose an event first") +
+      '</select></label></div><div class="entry-search"><input class="search" id="round-search" aria-label="Search rounds and standings" placeholder="Search entry, speaker, judge or room…" value="' +
+      attr(detailFilter) + '"></div><div id="round-list"></div>';
+    $("#round-event").onchange = (e) => {
+      roundEvent = e.target.value;
+      roundFilter = "";
+      renderDetail();
+    };
     $("#round-search").oninput = (e) => {
       detailFilter = e.target.value;
       drawRounds(sub);
@@ -980,10 +1001,9 @@ function judgePersonId(ballot) {
 }
 function renderRoundJudge(ballot) {
   const id = judgePersonId(ballot);
-  return esc(ballot.judge || "Judge not published") + (id ? " · " + external(
-    official + "/index/paradigm.mhtml?judge_person_id=" + id,
-    "Paradigm on Tabroom (login required)", "paradigm-link",
-  ) : "");
+  return esc(ballot.judge || "Judge not published") + (id ? ' · <a class="paradigm-link" href="' +
+    official + '/index/paradigm.mhtml?judge_person_id=' + id +
+    '" target="_blank" rel="noopener" title="Paradigm on Tabroom (login required)">Paradigm ↗</a>' : "");
 }
 // Treat only an explicit binary decision as a published vote. Never coerce blanks.
 function ballotOutcome(ballot) {
@@ -1007,7 +1027,7 @@ function renderEntryBallots(entry) {
   const outcomes = entry.ballots.map(ballotOutcome);
   const wins = outcomes.filter((value) => value === "win").length;
   const losses = outcomes.filter((value) => value === "loss").length;
-  return '<div class="ballot-summary">Published ballots only · total panel size unknown<br>Published votes: ' + wins + ' win · ' + losses +
+  return '<div class="ballot-summary">Published votes: ' + wins + ' win · ' + losses +
     ' loss</div><ul class="ballot-list">' + entry.ballots.map((ballot, index) => {
       const outcome = outcomes[index];
       const label = outcome === "unpublished" ? "Outcome not published" : outcome.toUpperCase();
@@ -1016,7 +1036,7 @@ function renderEntryBallots(entry) {
       return '<li>' + renderRoundJudge(ballot) +
         ' <span class="badge outcome-' + outcome + '">' + label + '</span>' +
         (scores ? '<small>' + esc(scores) + '</small>' : '') + '</li>';
-    }).join('') + '</ul><small>Panel outcome not confirmed. Published ballots may be incomplete.</small>';
+    }).join('') + '</ul>';
 }
 function initTheme() {
   const choices = ["system", "light", "dark", "midnight"];
@@ -1040,11 +1060,52 @@ function initTheme() {
   media.addEventListener("change", apply);
   apply();
 }
+function reconcileRoundFilters() {
+  if (!tournament.events.some((e) => e.id === roundEvent)) roundEvent = "";
+  if (!roundEvent || !tournament.rounds.some((r) => r.eventId === roundEvent && r.id === roundFilter)) roundFilter = "";
+}
+function standingsIdentity(result, set) {
+  if (set.tag === "speaker" || result.studentId)
+    return result.studentName || "Speaker name not published";
+  return tournament.entries.find((e) => e.id === result.entryId)?.code ||
+    result.school || (result.entryId ? "Entry " + result.entryId : "Entry not published");
+}
+function renderStandings() {
+  const sets = tournament.resultSets.filter((set) => !roundEvent || set.eventId === roundEvent);
+  const q = detailFilter.toLowerCase();
+  const groups = [
+    ["Speaker Awards", (set) => set.tag === "speaker"],
+    ["Prelim Rankings", (set) => set.tag === "seed"],
+    ["Other published standings", (set) => !["speaker", "seed"].includes(set.tag)],
+  ];
+  return '<div class="published-standings"><p class="smalltext">Standings are event-wide published result sets, not calculated from ballots. Round selection applies only to round results.</p>' +
+    groups.map(([label, matches], index) => {
+      const selected = sets.filter(matches);
+      if (!selected.length && index === 2) return "";
+      return '<h2>' + label + '</h2>' + (!selected.length
+        ? '<div class="card empty">Not published in this public export for the selected event(s). ' +
+          external(href(tournament.id, "results"), "Check official results", "") + '</div>'
+        : selected.map((set) => {
+          const rows = set.results.filter((result) => !q || [standingsIdentity(result, set), result.school, set.label, set.event]
+            .join(" ").toLowerCase().includes(q));
+          return '<section class="card standings-card"><h3>' + esc(set.event) + ' · ' + esc(set.label || "Published standings") + '</h3>' +
+            (!set.results.length ? '<p>Rankings not published in this export.</p>' : !rows.length ? '<p>No matching published standings.</p>' :
+              '<ul class="standings-list">' + rows.slice(0, 100).map((result) => {
+                const rank = String(result.rank ?? "");
+                const medal = /^[123]$/.test(rank) ? ['gold', 'silver', 'bronze'][Number(rank) - 1] : "";
+                return '<li><span class="standing-place' + (medal ? ' medal-' + medal : '') + '">' +
+                  esc(result.place || result.rank || "Rank not published") + '</span> · ' +
+                  esc(standingsIdentity(result, set)) + '</li>';
+              }).join("") + '</ul>' + (rows.length > 100 ? '<p>Showing first 100. Narrow your search.</p>' : "")) + '</section>';
+        }).join(""));
+    }).join("") + '</div>';
+}
 function drawRounds(sub) {
   const d = tournament,
     q = detailFilter.toLowerCase();
   const cards = [];
   for (const r of d.rounds) {
+    if (roundEvent && r.eventId !== roundEvent) continue;
     if (roundFilter && r.id !== roundFilter) continue;
     for (const s of r.sections) {
       const text = [
@@ -1095,6 +1156,7 @@ function drawRounds(sub) {
             )
             .join("") +
           "</div>" +
+          (sub === "results" ? '<p class="publication-note">Published ballots only · total panel size unknown. Panel outcome not confirmed. Published ballots may be incomplete.</p>' : "") +
           (sub === "results" && !entries.length
             ? '<p class="smalltext">Outcome not published. No ballots in this export.</p>'
             : "") +
@@ -1116,7 +1178,7 @@ function drawRounds(sub) {
       cards.slice(0, 100).join("")
     : '<div class="card empty"><h2>' +
       (sub === "results"
-        ? "No published results in this export."
+        ? "No matching published round results in this export."
         : "No published pairings in this export.") +
       "</h2><p>This does not confirm that no assignment exists.<br>The tournament may publish information elsewhere or require sign-in.</p>" +
       external(
@@ -1124,38 +1186,9 @@ function drawRounds(sub) {
         "Check official " + sub,
       ) +
       "</div>";
-  if (sub === "results") revealCards($("#round-list"), ".round-card", "results:" + d.id);
-  if (sub === "results" && d.resultSets.length) {
-    $("#round-list").insertAdjacentHTML(
-      "beforeend",
-      '<h2 style="margin:25px 0 15px">Published standings</h2>' +
-        d.resultSets
-          .map(
-            (s) =>
-              '<div class="card"><h3>' +
-              esc(s.event) +
-              " · " +
-              esc(s.label) +
-              "</h3>" +
-              s.results
-                .slice(0, 100)
-                .map(
-                  (r) =>
-                    '<p class="smalltext">' +
-                    esc(r.place || r.rank) +
-                    " · " +
-                    esc(
-                      d.entries.find((e) => e.id === r.entryId)?.code ||
-                        r.school ||
-                        "Entry " + r.entryId,
-                    ) +
-                    "</p>",
-                )
-                .join("") +
-              "</div>",
-          )
-          .join(""),
-    );
+  if (sub === "results") {
+    $("#round-list").innerHTML += renderStandings();
+    revealCards($("#round-list"), ".round-card", "results:" + d.id);
   }
 }
 function exportICS() {

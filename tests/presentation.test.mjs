@@ -196,8 +196,8 @@ test('paradigm links use only validated person IDs in ballot rows and ID-dedupli
 });
 test('cache shape version excludes old exports without judge person IDs', () => {
   const server = fs.readFileSync('src/server.mjs', 'utf8');
-  assert.match(server, /\/_cache\/v3\//);
-  assert.match(server, /tabbetter-public-v3/);
+  assert.match(server, /\/_cache\/v4\//);
+  assert.match(server, /tabbetter-public-v4/);
 });
 test('invalid BP speaker positions stay neutral, including inherited object keys', () => {
   for (const speakerorder of ['0', '5', '__proto__', 'constructor', 'toString']) {
@@ -212,5 +212,5 @@ test('absent ballots visible on opposing entry keep incomplete entry neutral', (
 });
 
 test('frontend versions API URLs to avoid browser-cached old export shapes', () => {
-  assert.match(source, /schema=3/);
+  assert.match(source, /schema=4/);
 });

@@ -195,18 +195,112 @@ export function parseCircuits(html) {
   if (!rows.length) throw Error("Circuit format changed");
   return rows;
 }
+// Invitation markup is tokenized into data, never retained as renderable HTML.
+// Decode text/attributes once, after recognizing tags, so encoded markup stays text.
+function invitationHref(tag, offset) {
+  const attributes = tag.slice(offset, -1);
+  for (const match of attributes.matchAll(/([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) {
+    if (match[1].toLowerCase() !== "href") continue;
+    const value = decodeEntitiesOnce(match[2] ?? match[3] ?? match[4] ?? "").trim();
+    if (!value) return null;
+    try {
+      const url = new URL(value, "https://www.tabroom.com");
+      return /^https?:$/.test(url.protocol) ? url.href : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+function invitationContent(html) {
+  const paragraphSegments = [], links = [], lower = html.toLowerCase();
+  let paragraph = null, anchor = null, afterHeading = false, i = 0;
+  const append = (text) => {
+    if (anchor) anchor.text += text;
+    else if (paragraph) {
+      const last = paragraph.at(-1);
+      if (last && !last.url) last.text += text;
+      else paragraph.push({ text });
+    }
+  };
+  const closeAnchor = () => {
+    if (anchor?.url && anchor.text.trim())
+      links.push({ label: anchor.text.replace(/\s+/g, " ").trim(), url: anchor.url });
+    anchor = null;
+  };
+  const closeParagraph = () => {
+    closeAnchor();
+    if (!paragraph) return;
+    // Collapse whitespace across segment boundaries without inserting spaces
+    // around inline tags (especially before punctuation).
+    let previous = "";
+    for (const segment of paragraph) {
+      segment.text = segment.text.replace(/\s+/g, " ");
+      if (!previous || previous.endsWith(" ")) segment.text = segment.text.trimStart();
+      previous += segment.text;
+    }
+    for (let n = paragraph.length - 1; n >= 0; n--) {
+      paragraph[n].text = paragraph[n].text.trimEnd();
+      if (paragraph[n].text) break;
+    }
+    const segments = paragraph.filter((segment) => segment.text);
+    if (segments.length && paragraphSegments.length < 180) paragraphSegments.push(segments);
+    paragraph = null;
+  };
+  while (i < html.length) {
+    if (html.startsWith("<!--", i)) {
+      const end = html.indexOf("-->", i + 4);
+      if (end < 0) break;
+      i = end + 3;
+      continue;
+    }
+    const tag = html[i] === "<" && html.slice(i).match(/^<(\/?)([a-z][a-z0-9:-]*)(?=[\s/>])/i);
+    if (tag || (html[i] === "<" && /[!?]/.test(html[i + 1] || ""))) {
+      const end = tagEnd(html, i + 1);
+      if (end < 0) break;
+      const markup = html.slice(i, end + 1);
+      i = end + 1;
+      if (!tag) continue;
+      const name = tag[2].toLowerCase(), closing = !!tag[1];
+      if (!closing && ["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "template", "noscript"].includes(name)) {
+        let close = lower.indexOf("</" + name, i);
+        while (close >= 0 && !/[\s/>]/.test(lower[close + name.length + 2] || ">"))
+          close = lower.indexOf("</" + name, close + 2);
+        if (close < 0) break;
+        const rawEnd = tagEnd(html, close + 2);
+        if (rawEnd < 0) break;
+        i = rawEnd + 1;
+        continue;
+      }
+      if (name === "h2" && closing) afterHeading = true;
+      if (name === "p" && afterHeading) {
+        closeParagraph();
+        if (!closing) paragraph = [];
+      } else if (name === "a") {
+        closeAnchor();
+        if (!closing) {
+          const url = invitationHref(markup, tag[0].length);
+          anchor = url ? { text: "", url } : { text: "" };
+          if (paragraph) paragraph.push(anchor);
+        }
+      } else if (["br", "hr", "div", "li", "tr"].includes(name)) append(" ");
+      continue;
+    }
+    const next = html.indexOf("<", i + 1);
+    const end = next < 0 ? html.length : next;
+    append(decodeEntitiesOnce(html.slice(i, end)));
+    i = end;
+  }
+  closeParagraph();
+  return { paragraphSegments, links };
+}
 export function parseInvitation(html, id) {
   const name = clean(html.match(/<h2\b[^>]*>([\s\S]*?)<\/h2>/i)?.[1]);
   if (!name || /Log In to Tabroom|access denied|just a moment/i.test(name))
     throw Error("Tournament unavailable");
-  let body = html.slice(html.indexOf("</h2>"));
-  const start = body.indexOf("<h3");
-  if (start >= 0) body = body.slice(start);
-  const paragraphs = [...body.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)]
-    .map((x) => clean(x[1]))
-    .filter(Boolean)
-    .slice(0, 180);
-  const links = linksIn(html).filter(
+  const content = invitationContent(html);
+  const paragraphs = content.paragraphSegments.map((segments) => segments.map((segment) => segment.text).join(""));
+  const links = content.links.filter(
     (l) =>
       l.label &&
       !/^(Home|Circuits|Results|Paradigms|Help|About|Sign Up|Join the NSDA|Privacy Policy|Terms|Login)$/i.test(
@@ -217,6 +311,7 @@ export function parseInvitation(html, id) {
     id,
     name,
     paragraphs,
+    paragraphSegments: content.paragraphSegments,
     links: [...new Map(links.map((l) => [l.url, l])).values()].slice(0, 100),
     sourceUrl: "https://www.tabroom.com/index/tourn/main.mhtml?tourn_id=" + id,
   };
@@ -238,6 +333,16 @@ export function normalizeExport(raw, id) {
     code: str(s.code),
   }));
   const schoolNames = new Map(schools.map((s) => [s.id, s.name]));
+  const studentNames = new Map();
+  for (const school of arr(raw.schools))
+    for (const student of arr(school.students)) {
+      const studentId = positiveId(student.id);
+      if (!studentId) continue;
+      // Public exports substitute the student ID for withheld first/last names.
+      const name = [student.first, student.middle, student.last]
+        .map(str).filter((part) => part && part !== studentId).join(" ");
+      studentNames.set(studentId, name);
+    }
   const entries = [];
   for (const s of arr(raw.schools))
     for (const e of arr(s.entries)) {
@@ -307,11 +412,20 @@ export function normalizeExport(raw, id) {
         if (Number(rs.published) !== 1) continue;
         resultSets.push({
           label: str(rs.label),
+          tag: str(rs.tag),
+          entity: str(rs.entity),
+          eventId: str(e.id),
           event: str(e.name),
-          results: arr(rs.results).map((r) => ({
+          // LEFT JOIN can export an empty result for a cache-only published set.
+          results: arr(rs.results).filter((r) =>
+            [r.rank, r.place, r.entry, r.student, r.school].some((value) => str(value).trim()),
+          ).map((r) => ({
             rank: str(r.rank),
             place: str(r.place),
             entryId: str(r.entry),
+            studentId: positiveId(r.student),
+            studentName: studentNames.get(str(r.student)) || "",
+            roundId: str(r.round),
             school: schoolNames.get(str(r.school)) || "",
           })),
         });

@@ -24,12 +24,12 @@ async function upstream(path) {
   return text;
 }
 async function cached(request, ctx, key, ttl, fn) {
-  const k = new Request(new URL("/_cache/v3/" + key, request.url));
+  const k = new Request(new URL("/_cache/v4/" + key, request.url));
   let edge = null,
     found = null;
   try {
     edge = globalThis.caches
-      ? await globalThis.caches.open("tabbetter-public-v3")
+      ? await globalThis.caches.open("tabbetter-public-v4")
       : null;
     found = edge && (await edge.match(k));
   } catch {
