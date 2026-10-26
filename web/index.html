@@ -33,7 +33,7 @@
       <div class="sidebar-bottom">
         <div class="source-note">
           <span class="status-dot"></span>Built around your round.<br />Public
-          data from Tabroom.<br /><a href="#about" style="color: #56866c"
+          data from Tabroom.<br /><a href="#about" style="color:var(--muted)"
             >About TabBetter ↗</a
           >
         </div>
@@ -45,7 +45,7 @@
           ><div class="avatar">↗</div>
           <div>
             <b>Open my Tabroom</b>
-            <div style="font-size: 10px; color: #92a097; margin-top: 4px">
+            <div style="font-size: 10px; color:var(--muted); margin-top: 4px">
               Account, ballots & registration
             </div>
           </div></a
@@ -62,6 +62,13 @@
           ><strong id="crumb">Tournaments</strong>
         </div>
         <div class="top-actions">
+          <label class="theme-label" for="theme">Theme</label>
+          <select id="theme" aria-label="Color theme">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="midnight">Midnight</option>
+          </select>
           <span class="pill">EARLY ACCESS</span
           ><a
             class="btn"

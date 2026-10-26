@@ -170,3 +170,17 @@ test("text extraction preserves comparisons and quoted tag boundaries", () => {
 test("invalid numeric entities do not crash source parsing", () => {
   assert.equal(clean("&#0; &#xD800; &#x110000;"), "� � �");
 });
+test("normalization retains every judge ballot including numeric zero and missing decisions", () => {
+  const fixture = structuredClone(raw);
+  fixture.categories[0].events[0].rounds[0].sections[0].ballots = [
+    { entry: 2, judge_first: "A", scores: [{ tag: "winloss", value: 0 }] },
+    { entry: 2, judge_first: "B", scores: [{ tag: "winloss", value: "1" }] },
+    { entry: 2, judge_first: "C", scores: [] },
+  ];
+  const ballots = normalizeExport(fixture, "12").rounds[0].sections[0].ballots;
+  assert.equal(ballots.length, 3);
+  assert.deepEqual(ballots.map((b) => b.judge), ["A", "B", "C"]);
+  assert.deepEqual(ballots.map((b) => b.scores), [
+    [{ tag: "winloss", value: "0" }], [{ tag: "winloss", value: "1" }], [],
+  ]);
+});

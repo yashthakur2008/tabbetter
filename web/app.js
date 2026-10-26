@@ -161,7 +161,7 @@ function hero(title, text, kicker = "YOUR NEXT ROUND STARTS HERE") {
   );
 }
 function sidebarHTML() {
-  return '<aside class="aside"><div class="card sidecard"><h3>Your tournament toolkit</h3><a class="linkrow" href="#judging">Judging assignments <span>→</span></a><a class="linkrow" href="#results">Rounds & results <span>→</span></a><a class="linkrow" href="#paradigms">Judge paradigms <span>→</span></a><a class="linkrow" href="#account">School & registration <span>↗</span></a></div><div class="card sidecard"><h3>Closer to home</h3><p class="sub" style="font-size:12px">Find the next tournament in your circuit.</p><button class="linkrow reset" data-cfl style="width:100%;text-decoration:none">Coast Forensic League <span>→</span></button><button class="linkrow reset" data-ca style="width:100%;text-decoration:none">California tournaments <span>→</span></button></div><div class="support-card"><strong>A calmer tournament day.</strong><p>Save a tournament to keep its entries, judges and published rounds one click away.</p><a href="#saved" style="font-size:11px;color:#827349">Your saved tournaments →</a></div><div class="sync" style="padding:18px 4px">Public pages, organized.<br>Freshness is shown on every view.<br>Account actions open on Tabroom.</div></aside>';
+  return '<aside class="aside"><div class="card sidecard"><h3>Your tournament toolkit</h3><a class="linkrow" href="#judging">Judging assignments <span>→</span></a><a class="linkrow" href="#results">Rounds & results <span>→</span></a><a class="linkrow" href="#paradigms">Judge paradigms <span>→</span></a><a class="linkrow" href="#account">School & registration <span>↗</span></a></div><div class="card sidecard"><h3>Closer to home</h3><p class="sub" style="font-size:12px">Find the next tournament in your circuit.</p><button class="linkrow reset" data-cfl style="width:100%;text-decoration:none">Coast Forensic League <span>→</span></button><button class="linkrow reset" data-ca style="width:100%;text-decoration:none">California tournaments <span>→</span></button></div><div class="support-card"><strong>A calmer tournament day.</strong><p>Save a tournament to keep its entries, judges and published rounds one click away.</p><a href="#saved" style="font-size:11px;color:var(--warning)">Your saved tournaments →</a></div><div class="sync" style="padding:18px 4px">Public pages, organized.<br>Freshness is shown on every view.<br>Account actions open on Tabroom.</div></aside>';
 }
 function opts(options, value, all) {
   return (
@@ -355,7 +355,7 @@ function drawCalendar() {
               t.id +
               '">' +
               esc(t.name) +
-              '</button><div style="font-size:10px;color:#93a48f;margin-top:5px">' +
+              '</button><div style="font-size:10px;color:var(--muted);margin-top:5px">' +
               esc([t.city, t.location].filter(Boolean).join(" · ")) +
               (t.judgeSignup ? " · Seeking judges" : "") +
               '</div></td><td class="hide-medium">' +
@@ -900,7 +900,7 @@ function drawPeople(sub) {
         visible
           .map(
             (r) =>
-              '<tr><td><strong style="color:#3b6246">' +
+              '<tr><td><strong style="color:var(--text)">' +
               esc(sub === "entries" ? r.code || r.name : r.name) +
               "</strong>" +
               (sub === "entries" && r.name && r.name !== r.code
@@ -915,6 +915,50 @@ function drawPeople(sub) {
           .join("") +
         "</tbody></table></div>"
       : '<div class="card empty">No matching ' + esc(sub) + ".</div>");
+}
+// Treat only an explicit binary decision as a published vote. Never coerce blanks.
+function ballotOutcome(ballot) {
+  const decisions = ballot.scores.filter((score) => score.tag === "winloss");
+  if (decisions.length !== 1) return "unpublished";
+  const value = String(decisions[0].value).trim();
+  return value === "1" ? "win" : value === "0" ? "loss" : "unpublished";
+}
+function renderEntryBallots(entry) {
+  const outcomes = entry.ballots.map(ballotOutcome);
+  const wins = outcomes.filter((value) => value === "win").length;
+  const losses = outcomes.filter((value) => value === "loss").length;
+  return '<div class="ballot-summary">Published votes: ' + wins + ' win · ' + losses +
+    ' loss</div><ul class="ballot-list">' + entry.ballots.map((ballot, index) => {
+      const outcome = outcomes[index];
+      const label = outcome === "unpublished" ? "Outcome not published" : outcome.toUpperCase();
+      const scores = ballot.scores.filter((score) => score.tag !== "winloss")
+        .map((score) => score.tag + ": " + score.value).join(" · ");
+      return '<li>' + esc(ballot.judge || "Judge not published") +
+        ' <span class="badge outcome-' + outcome + '">' + label + '</span>' +
+        (scores ? '<small>' + esc(scores) + '</small>' : '') + '</li>';
+    }).join('') + '</ul><small>Panel outcome not confirmed. Published ballots may be incomplete.</small>';
+}
+function initTheme() {
+  const choices = ["system", "light", "dark", "midnight"];
+  let preference = "system";
+  try {
+    const stored = localStorage.getItem("tabbetter-theme");
+    if (choices.includes(stored)) preference = stored;
+  } catch { /* Storage can be unavailable in private browsing. */ }
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  const select = $("#theme");
+  const apply = () => {
+    document.documentElement.dataset.theme = preference === "system"
+      ? (media.matches ? "dark" : "light") : preference;
+    select.value = preference;
+  };
+  select.addEventListener("change", () => {
+    preference = choices.includes(select.value) ? select.value : "system";
+    try { localStorage.setItem("tabbetter-theme", preference); } catch { /* Keep session choice. */ }
+    apply();
+  });
+  media.addEventListener("change", apply);
+  apply();
 }
 function drawRounds(sub) {
   const d = tournament,
@@ -932,11 +976,14 @@ function drawRounds(sub) {
         .join(" ")
         .toLowerCase();
       if (q && !text.includes(q)) continue;
-      if (sub === "results" && !s.ballots.some((b) => b.scores.length))
-        continue;
-      const entries = [
-        ...new Map(s.ballots.map((b) => [b.entryId, b])).values(),
-      ];
+      const grouped = new Map();
+      for (const [index, ballot] of s.ballots.entries()) {
+        // Missing IDs cannot safely identify the same entry.
+        const key = ballot.entryId || "unidentified-" + index;
+        if (!grouped.has(key)) grouped.set(key, { ...ballot, ballots: [] });
+        grouped.get(key).ballots.push(ballot);
+      }
+      const entries = [...grouped.values()];
       const judges = [
         ...new Set(s.ballots.map((b) => b.judge).filter(Boolean)),
       ];
@@ -950,7 +997,6 @@ function drawRounds(sub) {
           (s.flight ? " · Flight " + esc(s.flight) : "") +
           '</span></header><div class="versus">' +
           entries
-            .slice(0, 2)
             .map(
               (b, i) =>
                 (i ? '<span class="smalltext">vs.</span>' : "") +
@@ -960,23 +1006,14 @@ function drawRounds(sub) {
                 esc(b.entry) +
                 "</strong>" +
                 (sub === "results"
-                  ? "<small>" +
-                    esc(
-                      b.scores.map((v) => v.tag + ": " + v.value).join(" · "),
-                    ) +
-                    "</small>"
+                  ? renderEntryBallots(b)
                   : "") +
                 "</div>",
             )
             .join("") +
           "</div>" +
-          (entries.length > 2
-            ? '<p class="smalltext">' +
-              entries
-                .slice(2)
-                .map((b) => esc(b.entry))
-                .join(" · ") +
-              "</p>"
+          (sub === "results" && !entries.length
+            ? '<p class="smalltext">Outcome not published. No ballots in this export.</p>'
             : "") +
           '<div class="round-meta">' +
           (s.bye ? "Bye · " : "") +
@@ -1330,4 +1367,5 @@ setInterval(() => {
     if (r.name === "tournament") loadTournament(r.id);
   }
 }, 300000);
+initTheme();
 renderRoute();
