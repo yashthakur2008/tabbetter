@@ -724,6 +724,7 @@ function renderDetail() {
     ["judges", "Judges"],
     ["pairings", "Pairings"],
     ["results", "Results"],
+    ["statistics", "Statistics"],
     ["schedule", "Schedule"],
     ["resources", "Resources"],
   ];
@@ -907,6 +908,30 @@ function renderDetail() {
       drawRounds(sub);
     };
     drawRounds(sub);
+  } else if (sub === "statistics") {
+    reconcileRoundFilters();
+    target.innerHTML =
+      '<h2 style="margin-bottom:6px">Published statistics</h2><p class="sub" style="font-size:12px;margin-bottom:18px">Counts come from published ballots only. Rounds that are unpublished, in progress or restricted are not included.</p><div class="round-filters"><label for="stat-event">Event<select id="stat-event">' +
+      opts(d.events.map((e) => ({ value: e.id, label: e.name })), roundEvent, "All events") +
+      '</select></label><label for="stat-round">Round<select id="stat-round" ' +
+      (!roundEvent ? "disabled" : "") +
+      ">" +
+      opts(
+        d.rounds.filter((r) => r.eventId === roundEvent).map((r) => ({ value: r.id, label: r.name })),
+        roundFilter,
+        roundEvent ? "All published rounds" : "Choose an event first",
+      ) +
+      '</select></label></div><div id="statistics-list"></div>';
+    $("#stat-event").onchange = (e) => {
+      roundEvent = e.target.value;
+      roundFilter = "";
+      renderDetail();
+    };
+    $("#stat-round").onchange = (e) => {
+      roundFilter = e.target.value;
+      drawStatistics();
+    };
+    drawStatistics();
   } else if (sub === "schedule") {
     const times = d.timeslots;
     target.innerHTML =
@@ -994,6 +1019,152 @@ function roundSideLabel(round, ballot) {
     return '<span title="Conventional Parli label; event side settings are not in the public export">' +
       (side === "1" ? "Gov" : "Opp") + '</span>';
   return round.eventType === "debate" ? (side === "1" ? "Aff" : "Neg") : "Entry";
+}
+// Side rates count judge votes, which are the only outcomes the public export states.
+// Official match records are deliberately never inferred from a partial ballot set.
+function sideSplit(rounds) {
+  const sample = rounds[0] || {};
+  const parli =
+    sample.eventType !== "speech" &&
+    /\b(?:parli|parliamentary)\b/i.test(sample.event || "");
+  const split = {
+    supported: sample.eventType === "debate",
+    sideOneLabel: parli ? "Gov" : "Aff",
+    sideTwoLabel: parli ? "Opp" : "Neg",
+    decisions: 0,
+    sideOneWins: 0,
+    sideTwoWins: 0,
+    excluded: { byes: 0, unpublished: 0, unknownSide: 0, contradictory: 0, unpaired: 0 },
+  };
+  for (const round of rounds)
+    for (const section of round.sections || []) {
+      if (section.bye) {
+        split.excluded.byes++;
+        continue;
+      }
+      if (!split.supported) continue;
+      // Group by judge so a panel contributes one vote per judge, never one per panel.
+      const byJudge = new Map();
+      for (const ballot of section.ballots || []) {
+        const key = ballotJudgeKey(ballot);
+        if (!byJudge.has(key)) byJudge.set(key, []);
+        byJudge.get(key).push(ballot);
+      }
+      for (const ballots of byJudge.values()) {
+        const sides = ballots.map((b) => String(b.side));
+        if (ballots.length !== 2 || !sides.includes("1") || !sides.includes("2")) {
+          if (ballots.some((b) => !["1", "2"].includes(String(b.side))))
+            split.excluded.unknownSide++;
+          else split.excluded.unpaired++;
+          continue;
+        }
+        const one = ballots[sides.indexOf("1")];
+        const two = ballots[sides.indexOf("2")];
+        const outcomeOne = ballotOutcome(one);
+        const outcomeTwo = ballotOutcome(two);
+        if (outcomeOne === "unpublished" || outcomeTwo === "unpublished") {
+          split.excluded.unpublished++;
+          continue;
+        }
+        if (outcomeOne === outcomeTwo) {
+          split.excluded.contradictory++;
+          continue;
+        }
+        split.decisions++;
+        if (outcomeOne === "win") split.sideOneWins++;
+        else split.sideTwoWins++;
+      }
+    }
+  return split;
+}
+function statisticsGroups() {
+  const groups = [];
+  for (const event of tournament.events) {
+    if (roundEvent && event.id !== roundEvent) continue;
+    const rounds = tournament.rounds.filter(
+      (r) => r.eventId === event.id && (!roundFilter || r.id === roundFilter),
+    );
+    if (rounds.length) groups.push({ event, rounds, split: sideSplit(rounds) });
+  }
+  return groups;
+}
+function renderSideBar(split) {
+  const total = split.sideOneWins + split.sideTwoWins;
+  const share = Math.round((split.sideOneWins / total) * 100);
+  return (
+    '<div class="side-bar" role="img" aria-label="' +
+    attr(
+      split.sideOneLabel + " won " + share + "% of " + total + " published ballot votes",
+    ) +
+    '"><span class="side-bar-one" style="width:' +
+    share +
+    '%"></span></div><div class="side-bar-legend"><span><b>' +
+    esc(split.sideOneLabel) +
+    "</b> " +
+    share +
+    "% · " +
+    split.sideOneWins +
+    "</span><span><b>" +
+    esc(split.sideTwoLabel) +
+    "</b> " +
+    (100 - share) +
+    "% · " +
+    split.sideTwoWins +
+    "</span></div>"
+  );
+}
+function renderExclusions(split) {
+  const notes = [
+    [split.excluded.byes, "bye section"],
+    [split.excluded.unpublished, "section without a published decision"],
+    [split.excluded.unknownSide, "section without published sides"],
+    [split.excluded.contradictory, "section with conflicting votes"],
+    [split.excluded.unpaired, "section without both sides published"],
+  ].filter(([count]) => count);
+  if (!notes.length) return "";
+  return (
+    '<p class="smalltext">Excluded: ' +
+    notes
+      .map(([count, label]) => count + " " + label + (count === 1 ? "" : "s"))
+      .join(" · ") +
+    "</p>"
+  );
+}
+function drawStatistics() {
+  const groups = statisticsGroups();
+  $("#statistics-list").innerHTML = !groups.length
+    ? '<div class="card empty">No published rounds match this filter.</div>'
+    : groups
+        .map((group) => {
+          const split = group.split;
+          const body = !split.supported
+            ? '<p class="smalltext">Side win rates are not shown for this format. British Parliamentary rounds place four teams per room, so a two-sided rate would misrepresent the result.</p>'
+            : !split.decisions
+              ? '<p class="smalltext">No published decisions are available for this selection yet.</p>'
+              : renderSideBar(split) +
+                '<p class="smalltext">Based on ' +
+                split.decisions +
+                " published ballot vote" +
+                (split.decisions === 1 ? "" : "s") +
+                " (" +
+                split.decisions +
+                " decision" +
+                (split.decisions === 1 ? "" : "s") +
+                " counted). These are individual judge votes, not official match outcomes.</p>";
+          return (
+            '<article class="card stat-card"><h3>' +
+            esc(group.event.name) +
+            '</h3><p class="smalltext">' +
+            group.rounds.length +
+            " published round" +
+            (group.rounds.length === 1 ? "" : "s") +
+            "</p>" +
+            body +
+            renderExclusions(split) +
+            "</article>"
+          );
+        })
+        .join("");
 }
 function judgePersonId(ballot) {
   const id = String(ballot.judgePersonId ?? "");
