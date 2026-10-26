@@ -210,3 +210,7 @@ test('absent ballots visible on opposing entry keep incomplete entry neutral', (
   assert.doesNotMatch(html, /entry-result-win/);
   assert.match(html, /entry-result-neutral/);
 });
+
+test('frontend versions API URLs to avoid browser-cached old export shapes', () => {
+  assert.match(source, /schema=3/);
+});

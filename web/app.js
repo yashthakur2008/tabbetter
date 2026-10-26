@@ -124,7 +124,7 @@ function formatDate(s, tz) {
   }
 }
 async function api(path) {
-  const r = await fetch(path);
+  const r = await fetch(path + (path.includes("?") ? "&" : "?") + "schema=3");
   const d = await r.json();
   if (!r.ok) throw Error(d.error || "Source unavailable");
   return d;
