@@ -1714,3 +1714,17 @@ input::placeholder { color: var(--muted); opacity: 1; }
   .top-actions .pill, .theme-label { display: none; }
   .topbar { flex-wrap: wrap; height: auto; min-height: 65px; gap: 8px; padding-block: 10px; }
 }
+
+/* Optional card reveal: base content stays visible, independent of theme. */
+@keyframes card-reveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media screen and (prefers-reduced-motion: no-preference) {
+  .card-reveal {
+    animation: card-reveal 320ms ease-out var(--reveal-delay, 0ms) backwards;
+  }
+}
+@media (prefers-reduced-motion: reduce), print {
+  .card-reveal { animation: none; }
+}

@@ -325,6 +325,50 @@ function modeBadge(t) {
     )
     .join(" ");
 }
+// Progressive enhancement: never hide cards while waiting for the observer.
+const revealedCards = new Set();
+const pendingReveals = new Map();
+let cardRevealObserver;
+function revealCards(root, selector, namespace) {
+  try {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    for (const [node] of pendingReveals) {
+      if (!node.isConnected) {
+        cardRevealObserver.unobserve(node);
+        pendingReveals.delete(node);
+      }
+    }
+    if (!root?.querySelectorAll || !window.IntersectionObserver) return;
+    if (!cardRevealObserver) {
+      cardRevealObserver = new window.IntersectionObserver((entries) => {
+        let stagger = 0;
+        for (const { target, isIntersecting } of entries) {
+          if (!isIntersecting || !pendingReveals.has(target)) continue;
+          const key = pendingReveals.get(target);
+          pendingReveals.delete(target);
+          cardRevealObserver.unobserve(target);
+          if (!target.isConnected || revealedCards.has(key)) continue;
+          revealedCards.add(key);
+          if (media.matches) continue;
+          target.style.setProperty("--reveal-delay", Math.min(stagger++ * 40, 160) + "ms");
+          target.classList.add("card-reveal");
+        }
+      }, { threshold: 0.01 });
+    }
+    for (const node of root.querySelectorAll(selector)) {
+      // Outcomes and scores are deliberately excluded from refresh identity.
+      const identity = node.querySelector("[data-open]")?.dataset.open || [
+        node.querySelector("header")?.textContent,
+        ...Array.from(node.querySelectorAll(".versus strong"), (entry) => entry.textContent),
+      ];
+      const key = JSON.stringify([namespace, identity]);
+      if (media.matches) revealedCards.add(key);
+      if (revealedCards.has(key) || pendingReveals.has(node)) continue;
+      pendingReveals.set(node, key);
+      cardRevealObserver.observe(node);
+    }
+  } catch { /* Animation is optional. Content remains visible if APIs fail. */ }
+}
 function drawCalendar() {
   const a = filteredTournaments(),
     size = 15;
@@ -396,6 +440,7 @@ function drawCalendar() {
           )
           .join("") +
         "</div>";
+  revealCards($("#listing"), ".tournament-card", "tournament");
   $("#pager").innerHTML = a.length
     ? "<span>Showing " +
       ((page - 1) * size + 1) +
@@ -1041,6 +1086,7 @@ function drawRounds(sub) {
         "Check official " + sub,
       ) +
       "</div>";
+  if (sub === "results") revealCards($("#round-list"), ".round-card", "results:" + d.id);
   if (sub === "results" && d.resultSets.length) {
     $("#round-list").insertAdjacentHTML(
       "beforeend",
