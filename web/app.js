@@ -961,6 +961,30 @@ function drawPeople(sub) {
         "</tbody></table></div>"
       : '<div class="card empty">No matching ' + esc(sub) + ".</div>");
 }
+// Public exports omit event side settings. Never infer speech sides from numbers.
+function roundSideLabel(round, ballot) {
+  if (round.eventType === "wudc") {
+    const position = String(ballot.speakerorder);
+    return /^[1-4]$/.test(position) ? ["OG", "OO", "CG", "CO"][Number(position) - 1] : "Entry";
+  }
+  const side = String(ballot.side);
+  if (!["1", "2"].includes(side)) return "Entry";
+  if (round.eventType !== "speech" && /\b(?:parli|parliamentary)\b/i.test(round.event || ""))
+    return '<span title="Conventional Parli label; event side settings are not in the public export">' +
+      (side === "1" ? "Gov" : "Opp") + '</span>';
+  return round.eventType === "debate" ? (side === "1" ? "Aff" : "Neg") : "Entry";
+}
+function judgePersonId(ballot) {
+  const id = String(ballot.judgePersonId ?? "");
+  return /^[1-9]\d*$/.test(id) ? id : "";
+}
+function renderRoundJudge(ballot) {
+  const id = judgePersonId(ballot);
+  return esc(ballot.judge || "Judge not published") + (id ? " · " + external(
+    official + "/index/paradigm.mhtml?judge_person_id=" + id,
+    "Paradigm on Tabroom (login required)", "paradigm-link",
+  ) : "");
+}
 // Treat only an explicit binary decision as a published vote. Never coerce blanks.
 function ballotOutcome(ballot) {
   const decisions = ballot.scores.filter((score) => score.tag === "winloss");
@@ -968,17 +992,28 @@ function ballotOutcome(ballot) {
   const value = String(decisions[0].value).trim();
   return value === "1" ? "win" : value === "0" ? "loss" : "unpublished";
 }
+function ballotJudgeKey(ballot) {
+  return judgePersonId(ballot) ? "person:" + judgePersonId(ballot)
+    : ballot.judgeId ? "registration:" + ballot.judgeId : "name:" + (ballot.judge || "");
+}
+function entryResultTone(entry, sectionBallots = entry.ballots) {
+  const coverage = new Set(entry.ballots.map(ballotJudgeKey));
+  if (sectionBallots.some((ballot) => !coverage.has(ballotJudgeKey(ballot)))) return "neutral";
+  const votes = entry.ballots.map(ballotOutcome);
+  if (!votes.length || votes.includes("unpublished")) return "neutral";
+  return votes.every((vote) => vote === votes[0]) ? votes[0] : "neutral";
+}
 function renderEntryBallots(entry) {
   const outcomes = entry.ballots.map(ballotOutcome);
   const wins = outcomes.filter((value) => value === "win").length;
   const losses = outcomes.filter((value) => value === "loss").length;
-  return '<div class="ballot-summary">Published votes: ' + wins + ' win · ' + losses +
+  return '<div class="ballot-summary">Published ballots only · total panel size unknown<br>Published votes: ' + wins + ' win · ' + losses +
     ' loss</div><ul class="ballot-list">' + entry.ballots.map((ballot, index) => {
       const outcome = outcomes[index];
       const label = outcome === "unpublished" ? "Outcome not published" : outcome.toUpperCase();
       const scores = ballot.scores.filter((score) => score.tag !== "winloss")
         .map((score) => score.tag + ": " + score.value).join(" · ");
-      return '<li>' + esc(ballot.judge || "Judge not published") +
+      return '<li>' + renderRoundJudge(ballot) +
         ' <span class="badge outcome-' + outcome + '">' + label + '</span>' +
         (scores ? '<small>' + esc(scores) + '</small>' : '') + '</li>';
     }).join('') + '</ul><small>Panel outcome not confirmed. Published ballots may be incomplete.</small>';
@@ -1029,9 +1064,10 @@ function drawRounds(sub) {
         grouped.get(key).ballots.push(ballot);
       }
       const entries = [...grouped.values()];
-      const judges = [
-        ...new Set(s.ballots.map((b) => b.judge).filter(Boolean)),
-      ];
+      const judges = [...new Map(s.ballots
+        .filter((b) => b.judge || judgePersonId(b) || b.judgeId)
+        .map((b) => [judgePersonId(b) ? "person:" + judgePersonId(b)
+          : b.judgeId ? "registration:" + b.judgeId : "name:" + b.judge, b])).values()];
       cards.push(
         '<article class="card round-card"><header><h3>' +
           esc(r.event) +
@@ -1045,8 +1081,10 @@ function drawRounds(sub) {
             .map(
               (b, i) =>
                 (i ? '<span class="smalltext">vs.</span>' : "") +
-                "<div><small>" +
-                (b.side ? "Side " + esc(b.side) : "Entry") +
+                '<div class="entry-result' +
+                (sub === "results" ? ' entry-result-' + entryResultTone(b, s.ballots) : '') +
+                '"><small>' +
+                roundSideLabel(r, b) +
                 "</small><strong>" +
                 esc(b.entry) +
                 "</strong>" +
@@ -1065,7 +1103,7 @@ function drawRounds(sub) {
           "Judge" +
           (judges.length === 1 ? "" : "s") +
           ": " +
-          esc(judges.join(", ") || "Not published") +
+          (judges.map(renderRoundJudge).join(", ") || "Not published") +
           (r.start ? " · " + esc(formatDate(r.start, d.timezone)) : "") +
           "</div></article>",
       );

@@ -223,6 +223,7 @@ export function parseInvitation(html, id) {
 }
 const arr = (x) => (Array.isArray(x) ? x : []);
 const str = (x) => (x == null ? "" : String(x));
+const positiveId = (x) => /^[1-9]\d*$/.test(str(x)) ? str(x) : "";
 export function normalizeExport(raw, id) {
   if (
     !raw ||
@@ -281,7 +282,10 @@ export function normalizeExport(raw, id) {
             entry: str(b.entry_code || b.entry_name || "Entry not published"),
             judge:
               [b.judge_first, b.judge_last].filter(Boolean).join(" ") || "",
+            judgeId: positiveId(b.judge),
+            judgePersonId: positiveId(b.judge_person),
             side: str(b.side),
+            speakerorder: str(b.speakerorder),
             scores: arr(b.scores)
               .filter((v) =>
                 ["winloss", "rank", "point", "refute"].includes(v.tag),
@@ -294,6 +298,7 @@ export function normalizeExport(raw, id) {
           name: str(r.label || r.name),
           eventId: str(e.id),
           event: str(e.name),
+          eventType: str(e.type),
           start: str(r.start_time),
           sections,
         });

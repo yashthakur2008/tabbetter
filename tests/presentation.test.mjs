@@ -133,3 +133,80 @@ test('printing overrides every dark palette with readable light colors', () => {
 test('sections without any ballots explicitly say the outcome is unpublished', () => {
   assert.match(render([]), /Outcome not published/);
 });
+
+test('each result side has a green win or red loss panel, not only a small ballot badge', () => {
+  const html = render([ballot('Winner', '1'), ballot('Loser', '0')]);
+  assert.match(html, /class="entry-result entry-result-win"[\s\S]*?Winner/);
+  assert.match(html, /class="entry-result entry-result-loss"[\s\S]*?Loser/);
+});
+test('split or incomplete panel votes never color the entire entry as a decided result', () => {
+  for (const votes of [['1','0'], ['1',null], [null]]) {
+    const html = render(votes.map((v,i)=>ballot('Team', v, 'Judge '+i)));
+    assert.match(html, /class="entry-result entry-result-neutral"/);
+    assert.doesNotMatch(html, /class="entry-result entry-result-(win|loss)"/);
+  }
+});
+test('pairings have no win or loss panel styling before results view', () => {
+  assert.doesNotMatch(render([ballot('Team','1')], 'pairings'), /entry-result-(win|loss)/);
+});
+
+function renderRound(ballots, event, eventType, sub = 'pairings') {
+  const a = app();
+  a.context.fixture = { id: '1', resultSets: [], rounds: [{ id: '4', name: 'Round 4', event, eventType, sections: [{ room: '101', ballots }] }] };
+  vm.runInContext(`tournament = fixture; drawRounds(${JSON.stringify(sub)});`, a.context);
+  return a.node('#round-list').innerHTML;
+}
+test('debate sides use Aff/Neg defaults and named Parli discloses its conventional fallback', () => {
+  const ballots = [1, 2].map(side => ({ ...ballot('Team '+side, null), side: String(side) }));
+  const debate = renderRound(ballots, 'Public Forum', 'debate');
+  assert.match(debate, /<small>Aff<\/small>/);
+  assert.match(debate, /<small>Neg<\/small>/);
+  const parli = renderRound(ballots, 'Varsity Parliamentary Debate', 'debate');
+  assert.match(parli, /title="[^"]*[Cc]onventional[^"]*">Gov/);
+  assert.match(parli, />Opp<\/span>/);
+  for (const type of ['speech', '', 'unknown']) {
+    assert.doesNotMatch(renderRound(ballots, 'Original Oratory', type), /<small>(Aff|Neg)|>Gov|>Opp/);
+  }
+});
+test('BP positions use speakerorder only, never ballot.side', () => {
+  const ballots = [1,2,3,4].map(speakerorder => ({ ...ballot('Team '+speakerorder, null), side: '2', speakerorder: String(speakerorder) }));
+  const html = renderRound(ballots, 'British Parliamentary', 'wudc');
+  for (const label of ['OG','OO','CG','CO']) assert.match(html, new RegExp('<small>'+label+'</small>'));
+  assert.doesNotMatch(renderRound([{ ...ballot('Team', null), side: '1' }], 'BP', 'wudc'), /<small>(OG|OO|CG|CO|Aff|Neg)/);
+});
+test('paradigm links use only validated person IDs in ballot rows and ID-deduplicated round meta', () => {
+  const ballots = [
+    { ...ballot('A', '1', '<Same>'), judgeId: '999', judgePersonId: '123' },
+    { ...ballot('B', '0', '<Same>'), judgeId: '998', judgePersonId: '124' },
+    { ...ballot('C', '0', 'Alias'), judgeId: '997', judgePersonId: '123' },
+  ];
+  const html = renderRound(ballots, 'PF', 'debate', 'results');
+  const meta = html.split('<div class="round-meta">')[1];
+  assert.equal((meta.match(/judge_person_id=123/g) || []).length, 1);
+  assert.equal((meta.match(/judge_person_id=124/g) || []).length, 1);
+  assert.equal((html.match(/judge_person_id=/g) || []).length, 5);
+  assert.match(html, /https:\/\/www.tabroom.com\/index\/paradigm.mhtml\?judge_person_id=123/);
+  assert.match(html, /Paradigm on Tabroom \(login required\)/);
+  assert.match(html, /target="_blank" rel="noopener"/);
+  assert.match(html, /&lt;Same&gt;/);
+  assert.doesNotMatch(html, /judge_person_id=99/);
+  for (const id of [undefined, '', '0', '-1', '1.5', '1e2', '123" onclick="bad', true]) {
+    assert.doesNotMatch(renderRound([{ ...ballot('A','1'), judgePersonId: id, judgeId: '999' }], 'PF', 'debate', 'results'), /paradigm.mhtml/);
+  }
+});
+test('cache shape version excludes old exports without judge person IDs', () => {
+  const server = fs.readFileSync('src/server.mjs', 'utf8');
+  assert.match(server, /\/_cache\/v3\//);
+  assert.match(server, /tabbetter-public-v3/);
+});
+test('invalid BP speaker positions stay neutral, including inherited object keys', () => {
+  for (const speakerorder of ['0', '5', '__proto__', 'constructor', 'toString']) {
+    const html = renderRound([{ ...ballot('Team', null), side: '1', speakerorder }], 'BP', 'wudc');
+    assert.match(html, /<small>Entry<\/small>/);
+  }
+});
+test('absent ballots visible on opposing entry keep incomplete entry neutral', () => {
+  const html = render([ballot('A', '1', 'Judge 1'), ballot('B', '0', 'Judge 1'), ballot('B', '1', 'Judge 2'), ballot('B', '1', 'Judge 3')]);
+  assert.doesNotMatch(html, /entry-result-win/);
+  assert.match(html, /entry-result-neutral/);
+});

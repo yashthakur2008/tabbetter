@@ -184,3 +184,23 @@ test("normalization retains every judge ballot including numeric zero and missin
     [{ tag: "winloss", value: "0" }], [{ tag: "winloss", value: "1" }], [],
   ]);
 });
+
+test('rounds preserve event type, validated person and registration IDs, and separate speaker order', () => {
+  const fixture = structuredClone(raw);
+  const event = fixture.categories[0].events[0];
+  event.type = 'wudc';
+  event.settings = { private: 'secret-event' };
+  event.rounds[0].sections[0].ballots = [
+    { judge: 900, judge_person: 123, side: 2, speakerorder: 3 },
+    ...[undefined, '', 0, -1, '1.5', '1e2', '123&x=1', true].map(judge_person => ({ judge: 901, judge_person })),
+  ];
+  const round = normalizeExport(fixture, '12').rounds[0];
+  assert.equal(round.eventType, 'wudc');
+  const [first, ...invalid] = round.sections[0].ballots;
+  assert.equal(first.judgeId, '900');
+  assert.equal(first.judgePersonId, '123');
+  assert.equal(first.side, '2');
+  assert.equal(first.speakerorder, '3');
+  assert.ok(invalid.every(b => b.judgePersonId === ''));
+  assert.ok(!JSON.stringify(round).includes('secret-event'));
+});

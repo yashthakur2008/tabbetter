@@ -26,9 +26,9 @@ jobs:
       - name: Build the self-contained Worker
         if: ${{ hashFiles('src/server.mjs') != '' }}
         run: bash scripts/build.sh
-      - name: Run runtime regression tests
+      - name: Run all regression tests
         if: ${{ hashFiles('tests/runtime.test.mjs') != '' }}
-        run: node --test tests/runtime.test.mjs
+        run: node --test tests/*.test.mjs
       - name: Validate the deployable artifact
         if: ${{ hashFiles('scripts/validate-artifact.mjs') != '' }}
         run: node scripts/validate-artifact.mjs

@@ -1728,3 +1728,29 @@ input::placeholder { color: var(--muted); opacity: 1; }
 @media (prefers-reduced-motion: reduce), print {
   .card-reveal { animation: none; }
 }
+
+/* Published ballot outcomes use text as well as full-side color. */
+.entry-result {
+  min-width: 0;
+  flex: 1;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-inline-start-width: 4px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+.entry-result-win {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.entry-result-loss {
+  background: var(--loss-bg);
+  border-color: var(--loss);
+  color: var(--loss);
+}
+.versus .entry-result-win strong, .versus .entry-result-win small,
+.versus .entry-result-loss strong, .versus .entry-result-loss small {
+  color: inherit;
+}
+.entry-result .badge { font-weight: 800; }

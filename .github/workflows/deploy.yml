@@ -25,8 +25,8 @@ jobs:
         run: node --test tests/data.test.mjs
       - name: Build the self-contained Worker
         run: bash scripts/build.sh
-      - name: Run runtime regression tests
-        run: node --test tests/runtime.test.mjs
+      - name: Run all regression tests
+        run: node --test tests/*.test.mjs
       - name: Validate the deployable artifact
         run: node scripts/validate-artifact.mjs
       - name: Confirm deployment credentials
