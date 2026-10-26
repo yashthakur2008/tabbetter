@@ -1401,6 +1401,10 @@ async function renderRoute() {
 document
   .querySelectorAll("[data-nav]")
   .forEach((b) => (b.onclick = () => navigate(b.dataset.nav)));
+$(".skip-link").addEventListener("click", (event) => {
+  event.preventDefault();
+  $("#app").focus();
+});
 $("#jump-cancel").onclick = () => {
   delete $("#jump-form").dataset.dest;
   $("#jump").close();
