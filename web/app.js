@@ -932,6 +932,13 @@ function renderDetail() {
       drawStatistics();
     };
     drawStatistics();
+  } else if (sub === "member") {
+    let decoded = "";
+    try { decoded = decodeURIComponent(event || ""); } catch { /* Invalid bookmark. */ }
+    const [kind, ...rest] = decoded.split(":");
+    target.innerHTML = ["entry", "judge"].includes(kind)
+      ? renderMemberRecord(kind, rest.join(":"))
+      : '<div class="card empty">Record not found.</div>';
   } else if (sub === "schedule") {
     const times = d.timeslots;
     target.innerHTML =
@@ -991,9 +998,9 @@ function drawPeople(sub) {
         visible
           .map(
             (r) =>
-              '<tr><td><strong style="color:var(--text)">' +
-              esc(sub === "entries" ? r.code || r.name : r.name) +
-              "</strong>" +
+              '<tr><td>' +
+              memberLink(sub === "entries" ? "entry:" + r.id : "judge:" + judgeRecordKey(r),
+                sub === "entries" ? r.code || r.name : r.name) +
               (sub === "entries" && r.name && r.name !== r.code
                 ? '<div class="smalltext">' + esc(r.name) + "</div>"
                 : "") +
@@ -1166,13 +1173,144 @@ function drawStatistics() {
         })
         .join("");
 }
+// Prefer the registered entry name over the raw ballot code so records read clearly.
+function entryDisplayName(ballot) {
+  const entry = tournament?.entries?.find((e) => e.id === ballot.entryId);
+  return entry?.code || entry?.name || ballot.entry || "Entry not published";
+}
+function memberLink(target, label) {
+  if (!tournament?.id || !target || target.endsWith(":") || target.endsWith(":undefined") || target.startsWith("judge:name:")) return esc(label);
+  return (
+    '<a class="member-link" href="#tournament/' +
+    attr(tournament.id) +
+    "/member/" +
+    attr(encodeURIComponent(target).replaceAll("%3A", ":")) +
+    '">' +
+    esc(label) +
+    "</a>"
+  );
+}
+// Judge records use explicit published IDs, never same-name matching.
+function judgeRecordKey(judge) {
+  return "registration:" + judge.id;
+}
+function memberJudgeKey(ballot) {
+  return ballot.judgeId ? "registration:" + ballot.judgeId
+    : judgePersonId(ballot) ? "person:" + judgePersonId(ballot) : "";
+}
+// Member records reorganize published ballots by participant.
+// They never assert an official win-loss record, only the votes the export states.
+function memberAppearances(kind, key) {
+  const rows = [];
+  for (const round of tournament.rounds)
+    for (const section of round.sections || []) {
+      const all = section.ballots || [];
+      const mine = all.filter(b => kind === "entry" ? b.entryId === key : memberJudgeKey(b) === key);
+      if (!mine.length) continue;
+      const byJudge = new Map();
+      for (const [index, ballot] of mine.entries()) {
+        const judgeKey = memberJudgeKey(ballot) || "unidentified:" + index;
+        if (!byJudge.has(judgeKey)) byJudge.set(judgeKey, []);
+        byJudge.get(judgeKey).push(ballot);
+      }
+      const votes = [...byJudge.values()].map(ballots => ({
+        judge: ballots[0],
+        outcome: section.bye ? "bye" : kind !== "entry" ? "n/a"
+          : ballots.length === 1 ? ballotOutcome(ballots[0]) : "unpublished",
+        ballots,
+      }));
+      const opponents = [...new Map(all.filter(b => b.entryId !== key)
+        .map((b, i) => [b.entryId || "unknown:" + i, b])).values()];
+      rows.push({ round, section, subject: mine[0], opponents, votes });
+    }
+  return rows;
+}
+function memberIdentity(kind, key) {
+  if (kind === "entry") {
+    const entry = tournament.entries.find(e => e.id === key);
+    if (entry) return { title: entry.code || entry.name,
+      subtitle: [entry.name !== entry.code ? entry.name : "", entry.school, entry.event].filter(Boolean).join(" · ") };
+    const ballot = tournament.rounds.flatMap(r => r.sections || []).flatMap(s => s.ballots || [])
+      .find(b => b.entryId === key);
+    return ballot ? { title: ballot.entry, subtitle: "Entry details not published" } : null;
+  }
+  if (kind !== "judge" || !/^(registration|person):.+/.test(key)) return null;
+  const sample = tournament.rounds.flatMap(r => r.sections || []).flatMap(s => s.ballots || [])
+    .find(b => memberJudgeKey(b) === key);
+  const judge = tournament.judges.find(j => "registration:" + j.id === key);
+  if (!judge && !sample) return null;
+  return { title: judge?.name || sample.judge || "Judge not published",
+    subtitle: [judge?.school, judge?.category].filter(Boolean).join(" · "),
+    paradigm: sample ? judgePersonId(sample) : "" };
+}
+function memberVoteBadge(outcome) {
+  const label = outcome === "bye" ? "Bye" : outcome === "unpublished" ? "Not published" : outcome.toUpperCase();
+  return '<span class="badge outcome-' + (outcome === "bye" ? "unpublished" : outcome) + '">' + label + '</span>';
+}
+function memberRoundRows(row, kind) {
+  return row.votes.map(vote => {
+    const roundCell = '<th scope="row">' + esc(row.round.name) +
+      (row.section.flight ? '<small>Flight ' + esc(row.section.flight) + '</small>' : '') + '</th>';
+    const roomCell = '<td>' + esc(row.section.room || "Not published") + '</td>';
+    if (kind === "entry") return '<tr>' + roundCell + roomCell +
+      '<td>' + roundSideLabel(row.round, row.subject) + '</td><td>' +
+      (row.section.bye ? 'Bye' : row.opponents.map(b => memberLink("entry:" + b.entryId, entryDisplayName(b))).join('<br>') || 'Not published') +
+      '</td><td>' + memberLink("judge:" + memberJudgeKey(vote.judge), vote.judge.judge || "Judge not published") +
+      '</td><td>' + memberVoteBadge(vote.outcome) + '</td></tr>';
+    // Keep each decision adjacent to its entry, rather than two detached badge lists.
+    return '<tr>' + roundCell + roomCell + '<td><ul class="record-decisions">' + vote.ballots.map(b =>
+      '<li><span>' + roundSideLabel(row.round, b) + ' ' + memberLink("entry:" + b.entryId, entryDisplayName(b)) +
+      '</span>' + memberVoteBadge(row.section.bye ? "bye" : ballotOutcome(b)) + '</li>').join('') + '</ul></td></tr>';
+  }).join('');
+}
+function memberEventTable(eventName, rows, kind) {
+  const outcomes = rows.filter(r => !r.section.bye).flatMap(r => r.votes.map(v => v.outcome));
+  const wins = outcomes.filter(o => o === "win").length;
+  const losses = outcomes.filter(o => o === "loss").length;
+  const pending = outcomes.filter(o => o === "unpublished").length;
+  return '<section class="record-event"><header><h3>' + esc(eventName) + '</h3><p class="smalltext">' +
+    rows.length + ' published section' + (rows.length === 1 ? '' : 's') +
+    (kind === "entry" ? ' · ' + wins + ' win · ' + losses + ' loss in published ballot votes' +
+      (pending ? ' · ' + pending + ' unresolved' : '') : '') +
+    '</p></header><div class="table-wrap record-table" role="region" tabindex="0" aria-label="' + attr(eventName + ' round records') +
+    '"><table><caption>' + esc(eventName) + ' · Published rounds</caption><thead><tr><th scope="col">Round</th><th scope="col">Room</th>' +
+    (kind === "entry" ? '<th scope="col">Side</th><th scope="col">Opponent</th><th scope="col">Judge</th><th scope="col">Vote</th>'
+      : '<th scope="col">Entries &amp; decisions</th>') + '</tr></thead><tbody>' +
+    rows.map(row => memberRoundRows(row, kind)).join('') + '</tbody></table></div></section>';
+}
+function renderMemberRecord(kind, key) {
+  const identity = memberIdentity(kind, key);
+  const back = '<a class="member-back" href="#tournament/' + attr(tournament.id) +
+    (kind === "judge" ? '/judges' : '/entries') + '">← Back to ' + (kind === "judge" ? 'judges' : 'entries') + '</a>';
+  if (!identity) return back + '<div class="card empty"><h2>Record not found</h2><p>This identity is not published in this tournament.</p></div>';
+  const rows = memberAppearances(kind, key);
+  const groups = new Map();
+  for (const row of rows) {
+    const id = row.round.eventId || row.round.event;
+    if (!groups.has(id)) groups.set(id, { name: row.round.event, rows: [] });
+    groups.get(id).rows.push(row);
+  }
+  return back + '<section class="member-card"><p class="eyebrow">' +
+    (kind === "judge" ? 'JUDGE' : 'ENTRY') + ' RECORD · THIS TOURNAMENT</p><h2>' + esc(identity.title) +
+    '</h2><p class="member-subtitle">' + esc(identity.subtitle || '') + '</p><p class="record-scope">' +
+    esc(tournament.name) + ' · This tournament only. Events are kept separate.</p>' +
+    (identity.paradigm ? external(official + '/index/paradigm.mhtml?judge_person_id=' + identity.paradigm,
+      'Paradigm on Tabroom (login required)', 'paradigm-link') : '') +
+    '</section><p class="publication-note">' + (kind === "entry"
+      ? 'Published ballot votes, not an official win-loss record. Byes are shown separately. Missing or duplicate decisions are not counted as losses.'
+      : 'Published assignments and decisions only, not a judge’s full obligation.') +
+    ' Published ballots may be incomplete.</p>' +
+    (rows.length ? [...groups.values()].map(g => memberEventTable(g.name, g.rows, kind)).join('')
+      : '<div class="card empty"><h3>No published ballots</h3><p>This member is registered, but no round records are available in this export.</p>' +
+        external(href(tournament.id, 'results'), 'Check official results') + '</div>');
+}
 function judgePersonId(ballot) {
   const id = String(ballot.judgePersonId ?? "");
   return /^[1-9]\d*$/.test(id) ? id : "";
 }
 function renderRoundJudge(ballot) {
   const id = judgePersonId(ballot);
-  return esc(ballot.judge || "Judge not published") + (id ? ' · <a class="paradigm-link" href="' +
+  return memberLink("judge:" + memberJudgeKey(ballot), ballot.judge || "Judge not published") + (id ? ' · <a class="paradigm-link" href="' +
     official + '/index/paradigm.mhtml?judge_person_id=' + id +
     '" target="_blank" rel="noopener" title="Paradigm on Tabroom (login required)">Paradigm ↗</a>' : "");
 }
@@ -1318,7 +1456,7 @@ function drawRounds(sub) {
                 '"><small>' +
                 roundSideLabel(r, b) +
                 "</small><strong>" +
-                esc(b.entry) +
+                memberLink("entry:" + b.entryId, b.entry) +
                 "</strong>" +
                 (sub === "results"
                   ? renderEntryBallots(b)

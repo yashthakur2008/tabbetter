@@ -1915,3 +1915,43 @@ th { font-size: 11px; }
   .skip-link, .round-filters, .event-round-filters { display: none; }
   .content { padding: 0; }
 }
+
+/* Member records: restrained typography and event-scoped data tables. */
+.member-link, .member-back {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.member-link:hover, .member-back:hover { text-decoration-thickness: 2px; }
+.member-link:focus-visible, .member-back:focus-visible, .record-table:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.member-back { display: inline-block; margin-bottom: 24px; font-size: 13px; }
+.member-card { padding: 0 0 20px; border-bottom: 1px solid var(--border); }
+.member-card .eyebrow { margin: 0 0 10px; }
+.member-card h2 { margin: 0; font-size: clamp(23px, 3vw, 32px); line-height: 1.25; overflow-wrap: anywhere; }
+.member-subtitle { margin: 10px 0 0; color: var(--muted); font-size: 14px; }
+.record-scope { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
+.record-event { margin-top: 28px; }
+.record-event header { margin-bottom: 12px; }
+.record-event h3 { margin: 0 0 4px; font-size: 17px; }
+.record-event header p { margin: 0; line-height: 1.6; }
+.record-table { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+.record-table table { margin: 0; min-width: 580px; width: 100%; }
+.record-table caption { text-align: left; padding: 12px 16px; font-size: 12px; color: var(--muted); background: var(--subtle); }
+.record-table th, .record-table td { padding: 14px 16px; vertical-align: top; }
+.record-table th[scope="row"] { color: var(--text); font-weight: 600; text-transform: none; letter-spacing: normal; }
+.record-table th small { display: block; font-weight: 400; color: var(--muted); margin-top: 4px; }
+.record-table tbody tr:nth-child(even) { background: var(--subtle); }
+.record-table .badge { white-space: nowrap; }
+.record-decisions { list-style: none; margin: 0; padding: 0; }
+.record-decisions li { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.record-decisions li + li { margin-top: 10px; }
+@media (max-width: 600px) {
+  .member-back { margin-bottom: 18px; }
+  .record-event { margin-top: 22px; }
+  .record-table th, .record-table td { padding: 12px; }
+}
