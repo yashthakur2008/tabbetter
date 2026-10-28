@@ -41,7 +41,7 @@ test('source labels remain clickable in their original invitation paragraphs', (
   assert.deepEqual(inv.paragraphs, ['Before Campus Map, then Judge Info Sheet and Parli Topic Doc.']);
   assert.ok(Array.isArray(inv.paragraphSegments));
   const html = render(inv);
-  assert.match(html, /Before <a[^>]*href="https:\/\/www.tabroom.com\/map"[^>]*>Campus Map<\/a>, then /);
+  assert.match(html, /Before <a[^>]*href="https:\/\/www\.tabroom\.com\/map"[^>]*>Campus Map<\/a>, then /);
   assert.match(html, /href="https:\/\/example.org\/judges\?a=1&amp;b=2"[^>]*>Judge Info Sheet<\/a>/);
   assert.match(html, / and <a[^>]*href="http:\/\/example.org\/topics"[^>]*>Parli Topic Doc<\/a>\./);
   assert.match(html, /rel="noopener(?: noreferrer)?"/);

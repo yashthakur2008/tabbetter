@@ -33,9 +33,12 @@ function sandbox() {
   return { context, node, document };
 }
 
-// vm contexts return cross-realm objects, so results are serialised before assertion.
-const run = (expression) => {
+// vm contexts return cross-realm objects, so results are serialised before
+// assertion. Fixtures are passed in through the context rather than embedded in
+// the source string, so no test data is ever treated as code.
+const run = (expression, fixtures = {}) => {
   const box = sandbox();
+  Object.assign(box.context, fixtures);
   const value = vm.runInContext('JSON.stringify((' + expression + ') ?? null)', box.context);
   return JSON.parse(value);
 };
@@ -111,24 +114,26 @@ const exportFixture = (room, judge) => ({
 });
 
 test('an unchanged export reports no pairing changes', () => {
-  const changes = run(`(() => {
-    const a = pairingFingerprint(${JSON.stringify(exportFixture('101', 'Judge A'))});
-    const b = pairingFingerprint(${JSON.stringify(exportFixture('101', 'Judge A'))});
-    return fingerprintChanges(a, b);
-  })()`);
+  const changes = run(
+    '(() => fingerprintChanges(pairingFingerprint(A), pairingFingerprint(B)))()',
+    { A: exportFixture('101', 'Judge A'), B: exportFixture('101', 'Judge A') },
+  );
   assert.deepEqual(changes, { added: [], removed: [], updated: [] });
 });
 
 test('the first load never announces changes', () => {
-  const changes = run(`(() => fingerprintChanges(null, pairingFingerprint(${JSON.stringify(exportFixture('101', 'Judge A'))})))()`);
+  const changes = run('(() => fingerprintChanges(null, pairingFingerprint(A)))()', {
+    A: exportFixture('101', 'Judge A'),
+  });
   assert.deepEqual(changes, { added: [], removed: [], updated: [] });
   assert.equal(run(`changeSummary({ added: [], removed: [], updated: [] })`), '');
 });
 
 test('room and judge reassignments are reported as updates, not new pairings', () => {
-  const changes = run(`(() => fingerprintChanges(
-    pairingFingerprint(${JSON.stringify(exportFixture('101', 'Judge A'))}),
-    pairingFingerprint(${JSON.stringify(exportFixture('204', 'Judge B'))})))()`);
+  const changes = run(
+    '(() => fingerprintChanges(pairingFingerprint(A), pairingFingerprint(B)))()',
+    { A: exportFixture('101', 'Judge A'), B: exportFixture('204', 'Judge B') },
+  );
   assert.deepEqual(changes.added, []);
   assert.deepEqual(changes.removed, []);
   assert.equal(changes.updated.length, 1);
@@ -167,7 +172,7 @@ test('malformed or empty exports fingerprint safely', () => {
 
 test('sync status text reports checking, success and stale without inventing a timestamp', () => {
   const now = Date.UTC(2026, 9, 28, 3, 0, 0);
-  const text = (state) => run(`syncStatusText(${JSON.stringify(state)}, ${now})`);
+  const text = (state) => run('syncStatusText(S, N)', { S: state, N: now });
   assert.match(text({ inFlight: true, lastSuccess: null, failures: 0, stale: false }), /Checking/i);
   assert.match(text({ inFlight: false, lastSuccess: now - 30000, failures: 0, stale: false }), /Updated/i);
   const never = text({ inFlight: false, lastSuccess: null, failures: 0, stale: false });
@@ -179,7 +184,7 @@ test('sync status text reports checking, success and stale without inventing a t
 });
 
 test('status text escapes upstream error text', () => {
-  const html = run(`syncStatusText({ inFlight: false, lastSuccess: null, failures: 1, stale: true, error: '<img src=x>' }, 0)`);
+  const html = run('syncStatusText(S, 0)', { S: { inFlight: false, lastSuccess: null, failures: 1, stale: true, error: '<img src=x>' } });
   assert.doesNotMatch(html, /<img/);
 });
 

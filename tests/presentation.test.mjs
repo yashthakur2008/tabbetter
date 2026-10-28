@@ -185,7 +185,7 @@ test('paradigm links use only validated person IDs in ballot rows and ID-dedupli
   assert.equal((meta.match(/judge_person_id=123/g) || []).length, 1);
   assert.equal((meta.match(/judge_person_id=124/g) || []).length, 1);
   assert.equal((html.match(/judge_person_id=/g) || []).length, 5);
-  assert.match(html, /https:\/\/www.tabroom.com\/index\/paradigm.mhtml\?judge_person_id=123/);
+  assert.match(html, /https:\/\/www\.tabroom\.com\/index\/paradigm\.mhtml\?judge_person_id=123/);
   assert.match(html, /Paradigm on Tabroom \(login required\)/);
   assert.match(html, /target="_blank" rel="noopener"/);
   assert.match(html, /&lt;Same&gt;/);
