@@ -1,0 +1,10 @@
+name = "tabbetter"
+main = "dist/server/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Live custom domains. DNS is managed by Cloudflare Workers.
+routes = [
+  { pattern = "tabbetter.com", custom_domain = true },
+  { pattern = "www.tabbetter.com", custom_domain = true },
+]

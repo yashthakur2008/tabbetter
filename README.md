@@ -26,4 +26,38 @@ Review status is reported from actual checks and reviewers. Configuration for a 
 
 TabBetter is independent of Tabroom and the National Speech & Debate Association. Public exports only contain information the upstream service publishes. Official account actions, registration, private ballots, paradigms and tournament administration remain on Tabroom until an authorized integration is available.
 
-The project does not claim registered charity or tax-exempt status. Its nonprofit mission and co-founder attribution describe the initiative; they do not imply affiliation with NSDA.
+Organizational setup and domain launch are tracked separately from source-code publication.
+
+## Run the complete import
+
+The complete application is proposed on [`import/05-documentation`](https://github.com/yashthakur2008/tabbetter/tree/import/05-documentation) while the review stack is open.
+
+```sh
+git clone https://github.com/yashthakur2008/tabbetter.git
+cd tabbetter
+git switch import/05-documentation
+npm test
+npm run check
+npm run validate
+npm run dev
+```
+
+Requires Node.js 22 or newer. No runtime dependencies or package installation are required. The development server runs at http://127.0.0.1:4173.
+
+## Find your way around
+
+| Area                                          | Where to look                                                |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| Scope, access boundaries and feature coverage | [Feature audit](docs/feature-audit.md)                       |
+| Automatic tournament updates                  | [Live sync](docs/live-sync.md)                               |
+| Competitor profiles and rankings              | [Competitor profiles](docs/competitor-profiles.md)           |
+| Ranking sources, coverage and permissions     | [Rankings sources](docs/rankings-sources.md)                 |
+| Components and data flow                      | [Architecture](docs/architecture.md)                         |
+| Issue → branch → PR → review process          | [Development and review stack](docs/development.md)          |
+| Mission and co-founder                        | [Mission and team](docs/mission.md)                          |
+| Contribution and review standards             | [Contributing](CONTRIBUTING.md)                              |
+| Security reporting                            | [Security policy](SECURITY.md)                               |
+| Hosting, domain and release process           | [Deployment](docs/deployment.md)                             |
+| Planned improvements                          | [Issues](https://github.com/yashthakur2008/tabbetter/issues) |
+
+TabBetter is live at <https://tabbetter.com> and <https://www.tabbetter.com>, served by a Cloudflare Worker. Automatic deployment from `main` requires merging the deployment workflow and configuring its API-token secret. See [Deployment](docs/deployment.md) for verified launch status and remaining setup.
