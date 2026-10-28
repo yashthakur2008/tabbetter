@@ -97,6 +97,46 @@
   --medal-bronze-bg: #402e24;
 }
 
+
+/* Competitor profile: stat-led layout with a readable table under every chart. */
+.profile-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.profile-rail { position: static; }
+.profile-main { display: grid; gap: 20px; }
+.profile-head { margin-top: 20px; }
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 20px;
+}
+.profile-stats > div { display: flex; flex-direction: column; gap: 6px; }
+.stat-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat-value {
+  font-size: clamp(20px, 2.4vw, 30px);
+  font-weight: 650;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+.profile-rating .rating-history {
+  display: block;
+  width: 100%;
+  height: 64px;
+  margin-top: 22px;
+  color: var(--accent);
+}
+@media (max-width: 860px) {
+  .profile-layout { grid-template-columns: minmax(0, 1fr); }
+  .profile-rail { order: 2; }
+}
 @media print {
 :root, :root[data-theme] {
   color-scheme: light;

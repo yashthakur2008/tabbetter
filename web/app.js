@@ -259,6 +259,195 @@ function renderSyncStatus() {
   const node = $("#sync-status");
   if (node) node.textContent = syncStatusText(sync.state);
 }
+// Competitor profiles. Ratings belong to the source project; TabBetter
+// attributes them and refuses to invent a rank, percentile or person.
+const TEAM_ENTRY = /\s(?:&|and)\s/i;
+function ratingSparkline(records) {
+  if (records.length < 2) return "";
+  const values = records.map((r) => r.elo);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const points = records
+    .map((r, i) => {
+      const x = (i / (records.length - 1)) * 100;
+      const y = 30 - ((r.elo - min) / span) * 28;
+      return x.toFixed(1) + "," + y.toFixed(1);
+    })
+    .join(" ");
+  return (
+    '<svg class="rating-history" viewBox="0 0 100 32" preserveAspectRatio="none" role="img" aria-label="Rating by season, listed below">' +
+    '<polyline fill="none" stroke="currentColor" stroke-width="1.5" points="' +
+    points +
+    '"/></svg>'
+  );
+}
+function profileSeasonRows(records) {
+  return records
+    .map(
+      (r) =>
+        "<tr><th scope=\"row\">" +
+        esc(r.season) +
+        "</th><td>" +
+        esc(r.event) +
+        "</td><td>" +
+        (Number.isFinite(r.rank) ? "#" + r.rank : "Not published") +
+        "</td><td>" +
+        (Number.isFinite(r.elo) ? r.elo.toFixed(3).replace(/0+$/, "").replace(/\.$/, "") : "Not published") +
+        "</td></tr>",
+    )
+    .join("");
+}
+function renderCompetitorProfile(data) {
+  if (data?.available === false) {
+    $("#app").innerHTML =
+      '<div class="card empty"><h2>Historical rankings unavailable</h2><p>' +
+      esc(data.reason || "Historical rankings are not included in this build.") +
+      "</p></div>" +
+      footer;
+    return;
+  }
+  const records = [...(data?.records || [])].sort((a, b) =>
+    String(a.season).localeCompare(String(b.season)),
+  );
+  const current = records[records.length - 1];
+  if (!current) {
+    $("#app").innerHTML =
+      '<div class="card empty"><h2>No published rating</h2><p>This competitor has no record in the imported seasons of this source.</p></div>' +
+      footer;
+    return;
+  }
+  const cohort = Number.isFinite(data?.cohortSize) ? data.cohortSize : null;
+  const isTeam = TEAM_ENTRY.test(String(current.name || ""));
+  const percentile =
+    cohort && Number.isFinite(current.rank)
+      ? "Top " +
+        Math.max(0.1, Math.round((current.rank / cohort) * 1000) / 10).toFixed(1) +
+        "%"
+      : null;
+  $("#app").innerHTML =
+    '<div class="detail-header"><a href="#discover" class="smalltext">← All tournaments</a>' +
+    '<div class="profile-head"><div><div class="eyebrow">COMPETITOR PROFILE</div><h1>' +
+    esc(current.name || current.code) +
+    '</h1><div class="meta">' +
+    esc(current.code) +
+    " · " +
+    esc(current.event) +
+    " · " +
+    esc(current.season) +
+    "</div></div></div></div>" +
+    '<div class="profile-layout"><aside class="aside profile-rail"><div class="card sidecard"><h3>Identity</h3>' +
+    '<p class="smalltext">Entry code<br><b>' +
+    esc(current.code) +
+    "</b></p>" +
+    '<p class="smalltext">Event<br><b>' +
+    esc(current.event) +
+    "</b></p>" +
+    '<p class="smalltext">Seasons on record<br><b>' +
+    records.length +
+    "</b></p>" +
+    (isTeam
+      ? '<p class="notice">This is a team entry covering two competitors. It is not an individual rating and is not split into separate people.</p>'
+      : "") +
+    (data?.sharedCode
+      ? '<p class="notice">This entry code is also used by a different competitor in other seasons. Only seasons published under this name are included here.</p>'
+      : "") +
+    "</div>" +
+    '<div class="hint"><strong>Where this comes from</strong><p>Ratings are published by ' +
+    esc(data.provider || "the source project") +
+    ". " +
+    esc(data.methodology || "") +
+    ' TabBetter does not compute these ratings.</p></div></aside>' +
+    '<section class="profile-main"><div class="card profile-rating"><div class="profile-stats">' +
+    '<div><span class="stat-label">Rating</span><span class="stat-value">' +
+    (Number.isFinite(current.elo) ? current.elo.toFixed(2) : "Not published") +
+    "</span></div>" +
+    '<div><span class="stat-label">National rank</span><span class="stat-value">' +
+    (Number.isFinite(current.rank) ? "#" + current.rank : "Not published") +
+    "</span></div>" +
+    '<div><span class="stat-label">Field size</span><span class="stat-value">' +
+    (cohort ? cohort.toLocaleString("en-US") : "Not published") +
+    "</span></div>" +
+    '<div><span class="stat-label">Standing</span><span class="stat-value">' +
+    (percentile || "Cohort unknown") +
+    "</span></div></div>" +
+    ratingSparkline(records) +
+    "</div>" +
+    '<div class="card"><h3>Rating by season</h3><div class="table-wrap"><table><thead><tr><th>Season</th><th>Event</th><th>Rank</th><th>Rating</th></tr></thead><tbody>' +
+    profileSeasonRows(records) +
+    "</tbody></table></div>" +
+    (percentile
+      ? ""
+      : '<p class="notice">A percentile is not shown because the size of the ranked field is not published for this season.</p>') +
+    '</div></section></div><div class="source-line"><span>' +
+    esc(data.provider || "") +
+    " · Retrieved " +
+    esc(data.retrievedAt || "unknown") +
+    "</span>" +
+    external(data.sourceUrl || official, "Ranking source", "") +
+    "</div>" +
+    footer;
+}
+async function loadCompetitor() {
+  const token = ++routeToken;
+  const [, event = "", season = "", rawCode = ""] = location.hash
+    .slice(1)
+    .split("/");
+  const code = decodeURIComponent(rawCode);
+  if (!["LD", "PF"].includes(event) || !/^\d{4}-\d{4}$/.test(season) || !code) {
+    $("#app").innerHTML =
+      '<div class="card empty"><h2>This event is not covered</h2><p>Historical ratings are available for Lincoln-Douglas and Public Forum only, by season. Other events are not published by this source.</p></div>' +
+      footer;
+    return;
+  }
+  loading("Loading published rankings…");
+  try {
+    const data = await api(
+      "/api/rankings?event=" +
+        encodeURIComponent(event) +
+        "&season=" +
+        encodeURIComponent(season),
+    );
+    if (token !== routeToken) return;
+    if (data.available === false) return renderCompetitorProfile(data);
+    const all = data.competitors || [];
+    // A rating history needs every season, not only the one in the URL.
+    const others = (data.seasons || []).filter((s) => s !== season);
+    const history = await Promise.allSettled(
+      others.map((s) =>
+        api(
+          "/api/rankings?event=" +
+            encodeURIComponent(event) +
+            "&season=" +
+            encodeURIComponent(s),
+        ),
+      ),
+    );
+    if (token !== routeToken) return;
+    const records = all.filter((c) => c.code === code);
+    // School entry codes are reused by later students. Seasons join a history
+    // only when the published name matches; otherwise they are a different
+    // person who happens to share the code.
+    const identity = records[0]?.name || "";
+    let sharedCode = false;
+    for (const outcome of history) {
+      if (outcome.status !== "fulfilled") continue;
+      for (const row of outcome.value?.competitors || []) {
+        if (row.code !== code) continue;
+        if (identity && row.name === identity) records.push(row);
+        else sharedCode = true;
+      }
+    }
+    renderCompetitorProfile({
+      ...data,
+      cohortSize: all.length || null,
+      sharedCode,
+      records,
+    });
+  } catch (e) {
+    if (token === routeToken) $("#app").innerHTML = errorHTML(e) + footer;
+  }
+}
 function route() {
   const [name = "discover", id = "", sub = "overview", event = ""] =
     location.hash.slice(1).split("/");
@@ -1871,6 +2060,7 @@ async function renderRoute() {
       account: "School & registration",
       help: "Help & resources",
       about: "About TabBetter",
+      competitor: "Competitor profile",
     }[r.name] || "Tournaments";
   document
     .querySelectorAll("[data-nav]")
@@ -1882,6 +2072,7 @@ async function renderRoute() {
     if (calendar) calendarShell();
     else await loadCalendar();
   } else if (r.name === "circuits") await circuitsPage();
+  else if (r.name === "competitor") await loadCompetitor();
   else if (r.name === "tournament") {
     if (lastId === r.id && (tournament || invitation)) renderDetail();
     else await loadTournament(r.id);

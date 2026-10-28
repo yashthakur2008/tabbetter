@@ -133,6 +133,7 @@ export default {
           sourceUrl: corpus.sourceUrl,
           retrievedAt: corpus.generatedAt,
           window: corpus.window,
+          seasons: corpus.seasons,
           season,
           event,
           competitors: corpus.competitors.filter(
