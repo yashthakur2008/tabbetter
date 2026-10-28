@@ -31,8 +31,14 @@ into individuals or presented as one person's rating.
 
 ## Honest gaps
 
-- A percentile appears only when the size of the ranked field is known.
-- A missing rating or rank reads "Not published" rather than zero.
+- A competitor absent from a season reads **Unranked** for that season rather
+  than being omitted, and the rating, rank and standing cards read Unranked
+  rather than borrowing another season's numbers. Unranked means no published
+  rating in this source, not a low placement. An entry absent from every
+  imported season gets an Unranked empty state that says so.
+- A percentile appears only when the size of the ranked field is known, and
+  never for an unranked season.
+- A missing rating reads "Not published" rather than zero.
 - Events outside LD and PF report that they are not covered.
 - A build without the corpus reports that historical rankings are unavailable.
 

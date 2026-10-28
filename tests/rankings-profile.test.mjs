@@ -164,7 +164,7 @@ test('a reused entry code is never merged into one persons rating history', asyn
   const html = a.node('#app').innerHTML;
   assert.match(html, /Jeffery Wei/);
   assert.doesNotMatch(html, /2165\.769/, "another person's rating must not appear in this history");
-  assert.doesNotMatch(html, /2023-2024/, "another person's season must not appear in this history");
+  assert.match(html, /2023-2024[\s\S]*?Unranked/, "another person's season appears only as unranked for this competitor");
   assert.match(html, /also used by|different competitor|reused/i, 'the shared code is disclosed');
 });
 
@@ -209,4 +209,48 @@ test('the rankings nav does not depend on a hardcoded season', async () => {
   await vm.runInContext('rankingSearch = ""; loadRankings()', a.context);
   assert.doesNotMatch(asked.join(' '), /season=2025-2026/, 'an unspecified season must not pin to a stale year');
   assert.match(a.node('#ranking-list').innerHTML, /New Debater/);
+});
+
+test('seasons with no ranking are shown as unranked rather than omitted', () => {
+  // Real archive case: "Harker DS" appears only in 2021-2022 and 2022-2023.
+  const html = render([
+    { season: '2021-2022', event: 'LD', code: 'Harker DS', name: 'Deven Shah', rank: 6, elo: 2306.193 },
+    { season: '2022-2023', event: 'LD', code: 'Harker DS', name: 'Deven Shah', rank: 40, elo: 1900 },
+  ], 1046, { seasons: ['2021-2022', '2022-2023', '2023-2024', '2024-2025'] });
+  assert.match(html, /2023-2024[\s\S]*?Unranked/, 'a season with no published rating reads Unranked');
+  assert.match(html, /2024-2025[\s\S]*?Unranked/);
+  assert.match(html, /Deven Shah/);
+  assert.doesNotMatch(html, /2023-2024<\/th><td>LD<\/td><td>#/, 'an unranked season gets no invented rank');
+});
+
+test('a competitor absent from the requested season is reported as unranked, not missing', () => {
+  const a = app('#competitor/LD/2025-2026/Harker%20DS');
+  const seasons = {
+    '2021-2022': [{ season: '2021-2022', event: 'LD', code: 'Harker DS', name: 'Deven Shah', rank: 6, elo: 2306.193 }],
+    '2025-2026': [{ season: '2025-2026', event: 'LD', code: 'Someone EL', name: 'Someone Else', rank: 1, elo: 1800 }],
+  };
+  a.context.fetch = async (path) => {
+    const season = /season=([\d-]+)/.exec(path)?.[1] || '2025-2026';
+    return { ok: true, json: async () => ({ ...corpus, season, seasons: Object.keys(seasons), competitors: seasons[season] || [] }) };
+  };
+  return vm.runInContext('loadCompetitor()', a.context).then(() => {
+    const html = a.node('#app').innerHTML;
+    assert.match(html, /Deven Shah/, 'the competitor is still identified from the season they do appear in');
+    assert.match(html, /National rank<\/span><span class="stat-value">Unranked/, 'the headline rank reads Unranked for the requested season');
+    assert.match(html, /Rating<\/span><span class="stat-value">Unranked/, 'the headline rating does not borrow another season');
+    assert.doesNotMatch(html, /stat-value">#6</, "the 2021-2022 rank must not be presented as the 2025-2026 standing");
+    assert.doesNotMatch(html, /stat-value">2306/, "the 2021-2022 rating must not be presented as current");
+    assert.doesNotMatch(html, /Top \d/, 'no percentile is implied for an unranked season');
+    assert.match(html, /does not appear in the 2025-2026/, 'the gap is explained');
+  });
+});
+
+test('an entirely unknown code says unranked for this source, not that the person is bad', () => {
+  const a = app('#competitor/LD/2025-2026/Nobody%20ZZ');
+  a.context.fetch = async () => ({ ok: true, json: async () => ({ ...corpus, season: '2025-2026', seasons: ['2025-2026'], competitors: [] }) });
+  return vm.runInContext('loadCompetitor()', a.context).then(() => {
+    const html = a.node('#app').innerHTML;
+    assert.match(html, /Unranked/i);
+    assert.match(html, /not appear|no published rating in/i, 'absence is explained as absence from this source');
+  });
 });

@@ -282,20 +282,37 @@ function ratingSparkline(records) {
     '"/></svg>'
   );
 }
-function profileSeasonRows(records) {
-  return records
-    .map(
-      (r) =>
-        "<tr><th scope=\"row\">" +
+function profileSeasonRows(records, allSeasons) {
+  // Seasons the source covers but this competitor does not appear in are shown
+  // as Unranked. Omitting them would imply the history has no gaps.
+  const bySeason = new Map(records.map((r) => [r.season, r]));
+  const event = records[0]?.event || "";
+  const seasons = (allSeasons || []).length
+    ? [...new Set([...allSeasons, ...bySeason.keys()])].sort()
+    : records.map((r) => r.season);
+  return seasons
+    .map((season) => {
+      const r = bySeason.get(season);
+      if (!r)
+        return (
+          '<tr class="unranked"><th scope="row">' +
+          esc(season) +
+          "</th><td>" +
+          esc(event) +
+          '</td><td>Unranked</td><td>Not published</td></tr>'
+        );
+      return (
+        '<tr><th scope="row">' +
         esc(r.season) +
         "</th><td>" +
         esc(r.event) +
         "</td><td>" +
-        (Number.isFinite(r.rank) ? "#" + r.rank : "Not published") +
+        (Number.isFinite(r.rank) ? "#" + r.rank : "Unranked") +
         "</td><td>" +
         (Number.isFinite(r.elo) ? r.elo.toFixed(3).replace(/0+$/, "").replace(/\.$/, "") : "Not published") +
-        "</td></tr>",
-    )
+        "</td></tr>"
+      );
+    })
     .join("");
 }
 function renderCompetitorProfile(data) {
@@ -310,17 +327,24 @@ function renderCompetitorProfile(data) {
   const records = [...(data?.records || [])].sort((a, b) =>
     String(a.season).localeCompare(String(b.season)),
   );
-  const current = records[records.length - 1];
+  const requested = data?.season
+    ? records.find((r) => r.season === data.season)
+    : null;
+  const latest = records[records.length - 1];
+  // Showing the requested season keeps the URL honest; when the competitor is
+  // unranked there, the rating cards say so instead of borrowing another year.
+  const current = requested || latest;
+  const unrankedSeason = data?.season && !requested ? data.season : null;
   if (!current) {
     $("#app").innerHTML =
-      '<div class="card empty"><h2>No published rating</h2><p>This competitor has no record in the imported seasons of this source.</p></div>' +
+      '<div class="card empty"><h2>Unranked</h2><p>This entry does not appear in any imported season of this source, so it has no published rating here. That is an absence of data, not a low placement.</p></div>' +
       footer;
     return;
   }
   const cohort = Number.isFinite(data?.cohortSize) ? data.cohortSize : null;
   const isTeam = TEAM_ENTRY.test(String(current.name || ""));
   const percentile =
-    cohort && Number.isFinite(current.rank)
+    !unrankedSeason && cohort && Number.isFinite(current.rank)
       ? "Top " +
         Math.max(0.1, Math.round((current.rank / cohort) * 1000) / 10).toFixed(1) +
         "%"
@@ -334,7 +358,7 @@ function renderCompetitorProfile(data) {
     " · " +
     esc(current.event) +
     " · " +
-    esc(current.season) +
+    esc(data?.season || current.season) +
     "</div></div></div></div>" +
     '<div class="profile-layout"><aside class="aside profile-rail"><div class="card sidecard"><h3>Identity</h3>' +
     '<p class="smalltext">Entry code<br><b>' +
@@ -360,22 +384,35 @@ function renderCompetitorProfile(data) {
     ' TabBetter does not compute these ratings.</p></div></aside>' +
     '<section class="profile-main"><div class="card profile-rating"><div class="profile-stats">' +
     '<div><span class="stat-label">Rating</span><span class="stat-value">' +
-    (Number.isFinite(current.elo) ? current.elo.toFixed(2) : "Not published") +
+    (unrankedSeason
+      ? "Unranked"
+      : Number.isFinite(current.elo)
+        ? current.elo.toFixed(2)
+        : "Not published") +
     "</span></div>" +
     '<div><span class="stat-label">National rank</span><span class="stat-value">' +
-    (Number.isFinite(current.rank) ? "#" + current.rank : "Not published") +
+    (unrankedSeason
+      ? "Unranked"
+      : Number.isFinite(current.rank)
+        ? "#" + current.rank
+        : "Unranked") +
     "</span></div>" +
     '<div><span class="stat-label">Field size</span><span class="stat-value">' +
     (cohort ? cohort.toLocaleString("en-US") : "Not published") +
     "</span></div>" +
     '<div><span class="stat-label">Standing</span><span class="stat-value">' +
-    (percentile || "Cohort unknown") +
+    (percentile || (unrankedSeason ? "Unranked" : "Cohort unknown")) +
     "</span></div></div>" +
     ratingSparkline(records) +
     "</div>" +
     '<div class="card"><h3>Rating by season</h3><div class="table-wrap"><table><thead><tr><th>Season</th><th>Event</th><th>Rank</th><th>Rating</th></tr></thead><tbody>' +
-    profileSeasonRows(records) +
+    profileSeasonRows(records, data?.seasons) +
     "</tbody></table></div>" +
+    (unrankedSeason
+      ? '<p class="notice">This entry does not appear in the ' +
+        esc(unrankedSeason) +
+        " rankings published by this source. Unranked means no published rating for that season, not a low placement.</p>"
+      : "") +
     (percentile
       ? ""
       : '<p class="notice">A percentile is not shown because the size of the ranked field is not published for this season.</p>') +
@@ -550,15 +587,22 @@ async function loadCompetitor() {
     // School entry codes are reused by later students. Seasons join a history
     // only when the published name matches; otherwise they are a different
     // person who happens to share the code.
-    const identity = records[0]?.name || "";
-    let sharedCode = false;
+    const elsewhere = [];
     for (const outcome of history) {
       if (outcome.status !== "fulfilled") continue;
-      for (const row of outcome.value?.competitors || []) {
-        if (row.code !== code) continue;
-        if (identity && row.name === identity) records.push(row);
-        else sharedCode = true;
-      }
+      for (const row of outcome.value?.competitors || [])
+        if (row.code === code) elsewhere.push(row);
+    }
+    elsewhere.sort((a, b) => String(a.season).localeCompare(String(b.season)));
+    // When the entry is unranked in the requested season, identity comes from
+    // the most recent season it does appear in, so an unranked competitor is
+    // still named rather than treated as unknown.
+    const identity =
+      records[0]?.name || elsewhere[elsewhere.length - 1]?.name || "";
+    let sharedCode = false;
+    for (const row of elsewhere) {
+      if (identity && row.name === identity) records.push(row);
+      else sharedCode = true;
     }
     renderCompetitorProfile({
       ...data,
