@@ -27,7 +27,7 @@ reviews:
         Check fixed upstream hosts, bounded requests, publication settings,
         private-field minimization, stale-cache labeling and cache restrictions.
         Missing public pairings must never imply that a judge has no assignment.
-    - path: 'ui.html'
+    - path: 'web/**'
       instructions: >-
         Check untrusted text escaping, keyboard access, responsive navigation,
         asynchronous navigation races, source timestamps, empty states and
