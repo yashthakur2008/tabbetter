@@ -167,3 +167,46 @@ test('a reused entry code is never merged into one persons rating history', asyn
   assert.doesNotMatch(html, /2023-2024/, "another person's season must not appear in this history");
   assert.match(html, /also used by|different competitor|reused/i, 'the shared code is disclosed');
 });
+
+test('the rankings browser lists a season and links to each profile', async () => {
+  const a = app('#rankings/LD/2025-2026');
+  a.context.fetch = async () => ({ ok: true, json: async () => ({ ...corpus, seasons: ['2024-2025', '2025-2026'], competitors: [
+    { season: '2025-2026', event: 'LD', code: 'Marlborough OO', name: 'Olivia Ohr', rank: 1, elo: 1826.218 },
+    { season: '2025-2026', event: 'LD', code: 'Harker AB', name: 'A Debater', rank: 2, elo: 1800 },
+  ] }) });
+  await vm.runInContext('rankingSearch = ""; loadRankings()', a.context);
+  const list = a.node('#ranking-list').innerHTML;
+  const shell = a.node('#app').innerHTML;
+  assert.match(list, /Olivia Ohr/);
+  assert.match(list, /#competitor\/LD\/2025-2026\/Marlborough%20OO/, 'each row links to its own profile');
+  assert.match(shell, /DebateDrills x NSD x DebateLand/, 'the leaderboard keeps its attribution');
+  assert.match(shell, /LD|Lincoln/);
+});
+
+test('rankings search narrows by name or school without crashing on regex characters', async () => {
+  const a = app('#rankings/LD/2025-2026');
+  a.context.fetch = async () => ({ ok: true, json: async () => ({ ...corpus, seasons: ['2025-2026'], competitors: [
+    { season: '2025-2026', event: 'LD', code: 'Marlborough OO', name: 'Olivia Ohr', rank: 1, elo: 1826.218 },
+    { season: '2025-2026', event: 'LD', code: 'Harker AB', name: 'A Debater', rank: 2, elo: 1800 },
+  ] }) });
+  await vm.runInContext('rankingSearch = ""; loadRankings()', a.context);
+  vm.runInContext('rankingSearch = "marlborough"; drawRankings();', a.context);
+  const html = a.node('#ranking-list').innerHTML;
+  assert.match(html, /Olivia Ohr/);
+  assert.doesNotMatch(html, /A Debater/);
+  assert.doesNotThrow(() => vm.runInContext('rankingSearch = "(["; drawRankings();', a.context));
+});
+
+test('the rankings nav does not depend on a hardcoded season', async () => {
+  const a = app('#rankings');
+  const asked = [];
+  a.context.fetch = async (path) => {
+    asked.push(path);
+    return { ok: true, json: async () => ({ ...corpus, season: '2026-2027', seasons: ['2025-2026', '2026-2027'], competitors: [
+      { season: '2026-2027', event: 'LD', code: 'New AB', name: 'New Debater', rank: 1, elo: 1700 },
+    ] }) };
+  };
+  await vm.runInContext('rankingSearch = ""; loadRankings()', a.context);
+  assert.doesNotMatch(asked.join(' '), /season=2025-2026/, 'an unspecified season must not pin to a stale year');
+  assert.match(a.node('#ranking-list').innerHTML, /New Debater/);
+});

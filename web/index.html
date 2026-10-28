@@ -12,73 +12,33 @@
   </head>
   <body>
     <a class="skip-link btn" href="#app">Skip to tournament workspace</a>
-    <aside class="sidebar">
-      <a href="#discover" class="brand" aria-label="TabBetter home"
-        ><span class="mark" aria-hidden="true">›</span><span>TabBetter.</span></a>
-      <div class="tiny">Explore</div>
-      <nav class="nav" aria-label="Main navigation">
-        <button data-nav="discover" aria-label="Tournaments"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v15H3z M3 10h18 M8 3v4 M16 3v4" /></svg><span>Tournaments</span></button
-        ><button data-nav="saved" aria-label="Saved"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" /></svg><span>Saved</span></button
-        ><button data-nav="circuits" aria-label="Circuits"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18 M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10" /></svg><span>Circuits</span></button
-        ><button data-nav="results" aria-label="Results"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8v6a4 4 0 0 1-8 0Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 13v5 M8 21h8 M9 18h6v3" /></svg><span>Results</span></button
-        ><button data-nav="judging" aria-label="Judging"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14v17H5z M9 3h6v3H9z M9 10h6 M9 14h6 M9 18h4" /></svg><span>Judging</span></button
-        ><button data-nav="paradigms" aria-label="Paradigms"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14 M15 15l6 6" /></svg><span>Paradigms</span></button>
-      </nav>
-      <div class="tiny">Your Tabroom</div>
-      <nav class="nav account-nav" aria-label="Tabroom account and resources">
-        <button data-nav="account" aria-label="School & registration">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12 M8 21v-7h8v7 M8 9h.01 M16 9h.01" /></svg><span>School & registration</span></button
-        ><button data-nav="help" aria-label="Help & resources"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18 M12 11v6 M12 7h.01" /></svg><span>Help & resources</span></button>
-      </nav>
-      <div class="sidebar-bottom">
-        <div class="source-note">
-          <span class="status-dot"></span>Built around your round.<br />Public
-          data from Tabroom.<br /><a href="#about" style="color:var(--muted)"
-            >About TabBetter ↗</a
-          >
-        </div>
-        <a
-          href="https://www.tabroom.com/user/home.mhtml"
-          target="_blank"
-          rel="noopener"
-          class="profile"
-          ><div class="avatar">↗</div>
-          <div>
-            <b>Open my Tabroom</b>
-            <div style="font-size: 10px; color:var(--muted); margin-top: 4px">
-              Account, ballots & registration
+    <header class="site-header">
+      <div class="site-header-inner">
+        <a href="#discover" class="brand" aria-label="TabBetter home"><span class="mark" aria-hidden="true">›</span>TabBetter<span class="brand-period">.</span></a>
+        <nav class="primary-nav" aria-label="Main navigation">
+          <button data-nav="discover">Tournaments</button>
+          <button data-nav="saved">Saved</button>
+          <button data-nav="circuits">Circuits</button>
+          <button data-nav="results">Results</button>
+          <button data-nav="rankings">Rankings</button>
+          <details class="more-nav"><summary>More <span aria-hidden="true">⌄</span></summary>
+            <div class="more-menu">
+              <button data-nav="judging">Judging</button>
+              <button data-nav="paradigms">Paradigms</button>
+              <button data-nav="account">School &amp; registration</button>
+              <button data-nav="help">Help &amp; resources</button>
+              <a href="#about">About TabBetter</a>
             </div>
-          </div></a
-        >
+          </details>
+        </nav>
+        <div class="header-actions">
+          <label class="visually-hidden" for="theme">Color theme</label><select id="theme" aria-label="Color theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option></select>
+          <a class="btn primary-action" href="https://www.tabroom.com/user/home.mhtml" target="_blank" rel="noopener">My Tabroom ↗</a>
+        </div>
       </div>
-    </aside>
+    </header>
     <main>
-      <header class="topbar">
-        <a class="brand" href="#discover"
-          ><span class="mark">›</span>TabBetter.</a
-        >
-        <div class="breadcrumb">
-          Workspace <span style="padding: 0 12px">/</span
-          ><strong id="crumb">Tournaments</strong>
-        </div>
-        <div class="top-actions">
-          <label class="theme-label" for="theme">Theme</label>
-          <select id="theme" aria-label="Color theme">
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-            <option value="midnight">Midnight</option>
-          </select>
-          <span class="pill">EARLY ACCESS</span
-          ><a
-            class="btn"
-            href="https://www.tabroom.com/user/home.mhtml"
-            target="_blank"
-            rel="noopener"
-            >My Tabroom ↗</a
-          >
-        </div>
-      </header>
+      <div class="workspace-context"><span>TabBetter</span><span aria-hidden="true">/</span><strong id="crumb">Tournaments</strong><span class="workspace-status">Independent · Public Tabroom data</span></div>
       <div class="content" id="app" tabindex="-1">
         <div class="loading">Connecting to Tabroom…</div>
       </div>

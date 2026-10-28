@@ -111,7 +111,7 @@ export default {
       const season = url.searchParams.get("season") || "";
       if (!["LD", "PF"].includes(event))
         return json({ error: "Unsupported event" }, 400);
-      if (!/^\d{4}-\d{4}$/.test(season))
+      if (season && !/^\d{4}-\d{4}$/.test(season))
         return json({ error: "Invalid season" }, 400);
       // The archive corpus is embedded only when redistribution is cleared.
       if (typeof rankingsCorpus === "undefined" || !rankingsCorpus)
@@ -125,6 +125,9 @@ export default {
           3600,
         );
       const corpus = hydrateCorpus(rankingsCorpus);
+      // An omitted season resolves to the latest imported one, so clients never
+      // have to hardcode a year that will go stale.
+      const resolved = season || corpus.seasons[corpus.seasons.length - 1] || "";
       return json(
         {
           available: true,
@@ -134,10 +137,10 @@ export default {
           retrievedAt: corpus.generatedAt,
           window: corpus.window,
           seasons: corpus.seasons,
-          season,
+          season: resolved,
           event,
           competitors: corpus.competitors.filter(
-            (c) => c.event === event && c.season === season,
+            (c) => c.event === event && c.season === resolved,
           ),
         },
         200,

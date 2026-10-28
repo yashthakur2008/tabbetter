@@ -388,6 +388,128 @@ function renderCompetitorProfile(data) {
     "</div>" +
     footer;
 }
+// Season leaderboard. Rows link to individual profiles; the source and its
+// methodology stay attached to the list itself.
+let rankingData = null,
+  rankingSearch = "";
+function drawRankings() {
+  const list = $("#ranking-list");
+  if (!list || !rankingData) return;
+  const needle = rankingSearch.trim().toLowerCase();
+  const rows = (rankingData.competitors || [])
+    .filter(
+      (c) =>
+        !needle ||
+        String(c.name || "").toLowerCase().includes(needle) ||
+        String(c.code || "").toLowerCase().includes(needle),
+    )
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, 300);
+  list.innerHTML = !rows.length
+    ? '<div class="card empty"><h3>No competitor matches</h3><p>Try a different name or school code.</p></div>'
+    : '<div class="table-wrap"><table><thead><tr><th>Rank</th><th>Competitor</th><th>Entry code</th><th>Rating</th></tr></thead><tbody>' +
+      rows
+        .map(
+          (c) =>
+            '<tr><th scope="row">#' +
+            c.rank +
+            '</th><td><a class="member-link" href="#competitor/' +
+            encodeURIComponent(c.event) +
+            "/" +
+            encodeURIComponent(c.season) +
+            "/" +
+            encodeURIComponent(c.code) +
+            '">' +
+            esc(c.name || c.code) +
+            "</a></td><td>" +
+            esc(c.code) +
+            "</td><td>" +
+            (Number.isFinite(c.elo) ? c.elo.toFixed(2) : "Not published") +
+            "</td></tr>",
+        )
+        .join("") +
+      "</tbody></table></div>";
+}
+async function loadRankings() {
+  const token = ++routeToken;
+  const [, event = "LD", season = ""] = location.hash.slice(1).split("/");
+  if (!["LD", "PF"].includes(event)) {
+    $("#app").innerHTML =
+      '<div class="card empty"><h2>This event is not covered</h2><p>Published ratings are available for Lincoln-Douglas and Public Forum only.</p></div>' +
+      footer;
+    return;
+  }
+  loading("Loading published rankings…");
+  try {
+    const data = await api(
+      "/api/rankings?event=" +
+        encodeURIComponent(event) +
+        (season ? "&season=" + encodeURIComponent(season) : ""),
+    );
+    if (token !== routeToken) return;
+    if (data.available === false) return renderCompetitorProfile(data);
+    rankingData = data;
+    const seasons = data.seasons || [];
+    $("#app").innerHTML =
+      '<div class="detail-header"><div class="eyebrow">NATIONAL RANKINGS</div><h1>' +
+      esc(event) +
+      " · " +
+      esc(data.season) +
+      '</h1><div class="meta">Published by ' +
+      esc(data.provider || "") +
+      "</div></div>" +
+      '<div class="round-filters"><label for="rank-event">Event<select id="rank-event">' +
+      ["LD", "PF"]
+        .map(
+          (e) =>
+            '<option value="' +
+            e +
+            '"' +
+            (e === event ? " selected" : "") +
+            ">" +
+            e +
+            "</option>",
+        )
+        .join("") +
+      '</select></label><label for="rank-season">Season<select id="rank-season">' +
+      seasons
+        .map(
+          (s) =>
+            '<option value="' +
+            attr(s) +
+            '"' +
+            (s === data.season ? " selected" : "") +
+            ">" +
+            esc(s) +
+            "</option>",
+        )
+        .join("") +
+      '</select></label><label for="rank-search">Search<input id="rank-search" type="search" placeholder="Name or school code" value="' +
+      attr(rankingSearch) +
+      '"></label></div><div id="ranking-list"></div>' +
+      '<div class="source-line"><span>' +
+      esc(data.provider || "") +
+      " · " +
+      esc(data.methodology || "") +
+      "</span>" +
+      external(data.sourceUrl || official, "Ranking source", "") +
+      "</div>" +
+      footer;
+    drawRankings();
+    const go = () =>
+      navigate(
+        "rankings/" + $("#rank-event").value + "/" + $("#rank-season").value,
+      );
+    $("#rank-event").onchange = go;
+    $("#rank-season").onchange = go;
+    $("#rank-search").oninput = (e) => {
+      rankingSearch = e.target.value;
+      drawRankings();
+    };
+  } catch (e) {
+    if (token === routeToken) $("#app").innerHTML = errorHTML(e) + footer;
+  }
+}
 async function loadCompetitor() {
   const token = ++routeToken;
   const [, event = "", season = "", rawCode = ""] = location.hash
@@ -2061,6 +2183,7 @@ async function renderRoute() {
       help: "Help & resources",
       about: "About TabBetter",
       competitor: "Competitor profile",
+      rankings: "National rankings",
     }[r.name] || "Tournaments";
   document
     .querySelectorAll("[data-nav]")
@@ -2073,6 +2196,7 @@ async function renderRoute() {
     else await loadCalendar();
   } else if (r.name === "circuits") await circuitsPage();
   else if (r.name === "competitor") await loadCompetitor();
+  else if (r.name === "rankings") await loadRankings();
   else if (r.name === "tournament") {
     if (lastId === r.id && (tournament || invitation)) renderDetail();
     else await loadTournament(r.id);
@@ -2083,7 +2207,13 @@ async function renderRoute() {
 }
 document
   .querySelectorAll("[data-nav]")
-  .forEach((b) => (b.onclick = () => navigate(b.dataset.nav)));
+  .forEach(
+    (b) =>
+      (b.onclick = () =>
+        navigate(
+          b.dataset.nav === "rankings" ? "rankings/LD" : b.dataset.nav,
+        )),
+  );
 $(".skip-link").addEventListener("click", (event) => {
   event.preventDefault();
   $("#app").focus();
