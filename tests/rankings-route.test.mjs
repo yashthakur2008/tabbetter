@@ -37,3 +37,9 @@ test('the bundled worker never embeds a corpus without recorded provenance', () 
   assert.match(worker, /skumar-ml\/debate-rankings/, 'an embedded corpus must carry its source URL');
   assert.match(worker, /DebateDrills x NSD x DebateLand/, 'an embedded corpus must name its provider');
 });
+
+test('rankings responses are revalidated so a redeploy cannot serve a stale corpus for an hour', async () => {
+  const response = await get('/api/rankings?event=LD&season=2025-2026');
+  const cacheControl = response.headers.get('cache-control') || '';
+  assert.match(cacheControl, /must-revalidate|no-cache|max-age=0/, 'a client must recheck before reusing rankings: ' + cacheControl);
+});

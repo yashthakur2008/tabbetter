@@ -49,6 +49,9 @@ Requires Node.js 22 or newer. No runtime dependencies or package installation ar
 | Area                                          | Where to look                                                |
 | --------------------------------------------- | ------------------------------------------------------------ |
 | Scope, access boundaries and feature coverage | [Feature audit](docs/feature-audit.md)                       |
+| Automatic tournament updates                  | [Live sync](docs/live-sync.md)                               |
+| Competitor profiles and rankings              | [Competitor profiles](docs/competitor-profiles.md)           |
+| Ranking sources, coverage and permissions     | [Rankings sources](docs/rankings-sources.md)                 |
 | Components and data flow                      | [Architecture](docs/architecture.md)                         |
 | Issue → branch → PR → review process          | [Development and review stack](docs/development.md)          |
 | Mission and co-founder                        | [Mission and team](docs/mission.md)                          |

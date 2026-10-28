@@ -29,6 +29,15 @@ The normalizer whitelists output fields and rejects a private export or the wron
 | `.github/workflows/`  | Repository checks, independent CodeQL analysis and Worker deploy       |
 | `wrangler.toml`       | Worker name, entry artifact and production domain routes               |
 
+## Automatic sync and rankings
+
+An open tournament refreshes itself on the public-export cache cadence; see
+[live sync](live-sync.md). Historical LD and PF ratings come from a separately
+imported corpus embedded at build time; see
+[competitor profiles](competitor-profiles.md) and
+[rankings sources](rankings-sources.md). A build without that corpus reports
+historical rankings as unavailable rather than inventing them.
+
 ## Cache and freshness
 
 Calendar and invitation: 10 minutes. Public export: 5 minutes. Circuit directory: 1 hour. Named host caching is optional; a restricted host falls back to a bounded per-instance memory cache. Concurrent requests coalesce within an instance, not globally. A failed refresh may return a labeled warm-instance stale copy.

@@ -1,11 +1,17 @@
 const pending = new Map(),
   memory = new Map();
-function json(value, status = 200, ttl = 0) {
+function json(value, status = 200, ttl = 0, revalidate = false) {
   return new Response(JSON.stringify(value), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
-      "cache-control": ttl ? "public, max-age=" + ttl : "no-store",
+      // Build-pinned data must be rechecked, so a redeploy cannot leave a
+      // client showing a corpus the server no longer has.
+      "cache-control": revalidate
+        ? "public, max-age=" + ttl + ", must-revalidate"
+        : ttl
+          ? "public, max-age=" + ttl
+          : "no-store",
       "x-content-type-options": "nosniff",
     },
   });
@@ -123,6 +129,7 @@ export default {
           },
           200,
           3600,
+          true,
         );
       const corpus = hydrateCorpus(rankingsCorpus);
       // An omitted season resolves to the latest imported one, so clients never
@@ -145,6 +152,7 @@ export default {
         },
         200,
         3600,
+        true,
       );
     }
     if (url.pathname === "/api/circuits")
