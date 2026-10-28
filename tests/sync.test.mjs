@@ -164,3 +164,78 @@ test('malformed or empty exports fingerprint safely', () => {
     assert.deepEqual(changes, { added: [], removed: [], updated: [] });
   }
 });
+
+test('sync status text reports checking, success and stale without inventing a timestamp', () => {
+  const now = Date.UTC(2026, 9, 28, 3, 0, 0);
+  const text = (state) => run(`syncStatusText(${JSON.stringify(state)}, ${now})`);
+  assert.match(text({ inFlight: true, lastSuccess: null, failures: 0, stale: false }), /Checking/i);
+  assert.match(text({ inFlight: false, lastSuccess: now - 30000, failures: 0, stale: false }), /Updated/i);
+  const never = text({ inFlight: false, lastSuccess: null, failures: 0, stale: false });
+  assert.match(never, /Waiting|Not yet/i);
+  assert.doesNotMatch(never, /\d{1,2}:\d{2}/);
+  const failed = text({ inFlight: false, lastSuccess: now - 600000, failures: 2, stale: true, error: 'Source unavailable' });
+  assert.match(failed, /not refresh|stale|unavailable/i);
+  assert.match(failed, /\d/);
+});
+
+test('status text escapes upstream error text', () => {
+  const html = run(`syncStatusText({ inFlight: false, lastSuccess: null, failures: 1, stale: true, error: '<img src=x>' }, 0)`);
+  assert.doesNotMatch(html, /<img/);
+});
+
+function detailBox(responses) {
+  const box = sandbox();
+  const calls = [];
+  box.context.fetch = async (path) => {
+    calls.push(path);
+    const next = responses.shift();
+    if (next instanceof Error) throw next;
+    return { ok: true, json: async () => next };
+  };
+  box.context.location.hash = '#tournament/55/pairings';
+  box.context.window.location = box.context.location;
+  vm.runInContext('loadingCalls = 0; loading = () => { loadingCalls++; };', box.context);
+  vm.runInContext('toasts = []; toast = (m) => toasts.push(m);', box.context);
+  return { box, calls };
+}
+const tournamentPayload = (room, judge) => ({
+  id: '55', name: 'Test Invitational', entries: [], judges: [], schools: [], events: [],
+  resultSets: [], fetchedAt: '2026-10-28T03:00:00.000Z', sourceUrl: 'https://www.tabroom.com/',
+  rounds: [{ id: '4', name: 'Round 4', event: 'PF', sections: [{ room, ballots: [{ entryId: '7', entry: 'Harker AB', judge, side: 'Aff' }] }] }],
+});
+
+test('a background refresh never blanks the view and reports only later pairing changes', async () => {
+  const { box } = detailBox([
+    tournamentPayload('101', 'Judge A'), { paragraphs: [] },
+    tournamentPayload('204', 'Judge A'), { paragraphs: [] },
+  ]);
+  await vm.runInContext('loadTournament("55")', box.context);
+  const initial = vm.runInContext('JSON.stringify({ loads: loadingCalls, toasts })', box.context);
+  assert.deepEqual(JSON.parse(initial), { loads: 1, toasts: [] }, 'the first load must not announce changes');
+  await vm.runInContext('loadTournament("55", { background: true })', box.context);
+  const after = JSON.parse(vm.runInContext('JSON.stringify({ loads: loadingCalls, toasts })', box.context));
+  assert.equal(after.loads, 1, 'a background refresh must not clear the page');
+  assert.equal(after.toasts.length, 1);
+  assert.match(after.toasts[0], /updated assignment/);
+});
+
+test('a failed background refresh keeps the last published data and reports it as stale', async () => {
+  const { box } = detailBox([
+    tournamentPayload('101', 'Judge A'), { paragraphs: [] },
+    Error('Source unavailable'), Error('Source unavailable'),
+  ]);
+  await vm.runInContext('loadTournament("55")', box.context);
+  const before = vm.runInContext('$("#app").innerHTML', box.context);
+  await vm.runInContext('loadTournament("55", { background: true })', box.context);
+  assert.equal(vm.runInContext('$("#app").innerHTML', box.context), before, 'the previous render must survive a failed refresh');
+  assert.match(vm.runInContext('$("#sync-status").textContent', box.context), /Could not refresh/);
+  assert.equal(vm.runInContext('sync.state.stale', box.context), true);
+});
+
+test('a response for a tournament the user already left is discarded', async () => {
+  const { box } = detailBox([tournamentPayload('101', 'Judge A'), { paragraphs: [] }]);
+  const pending = vm.runInContext('loadTournament("55")', box.context);
+  vm.runInContext('lastId = "99"; routeToken++;', box.context);
+  await pending;
+  assert.equal(vm.runInContext('tournament === null', box.context), true);
+});

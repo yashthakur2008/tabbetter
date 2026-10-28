@@ -42,6 +42,7 @@ let saved = readSaved(),
   detailEvent = "",
   roundFilter = "",
   roundEvent = "",
+  pairingState = null,
   peopleSearch = "";
 const filter = {
   q: "",
@@ -130,6 +131,134 @@ async function api(path) {
   if (!r.ok) throw Error(d.error || "Source unavailable");
   return d;
 }
+// Automatic sync. Published exports are polled on the server cache cadence;
+// nothing here claims live tab access or authenticated Tabroom parity.
+function backoffDelay(intervalMs, failures) {
+  if (!failures) return intervalMs;
+  return Math.min(intervalMs, 30000 * Math.pow(2, failures - 1));
+}
+function createSyncController({ intervalMs = 300000, now = () => Date.now() } = {}) {
+  const state = {
+    lastAttempt: now(),
+    lastSuccess: null,
+    inFlight: false,
+    failures: 0,
+    error: null,
+    stale: false,
+  };
+  return {
+    state,
+    intervalMs,
+    now,
+    due(hidden) {
+      if (hidden || state.inFlight) return false;
+      return now() - state.lastAttempt >= backoffDelay(intervalMs, state.failures);
+    },
+    begin() {
+      state.inFlight = true;
+      state.lastAttempt = now();
+    },
+    succeed() {
+      state.inFlight = false;
+      state.failures = 0;
+      state.error = null;
+      state.stale = false;
+      state.lastSuccess = now();
+    },
+    fail(error) {
+      state.inFlight = false;
+      state.failures += 1;
+      state.error = error?.message || String(error || "Source unavailable");
+      // A failed refresh never discards the last good render.
+      state.stale = true;
+    },
+    reset() {
+      state.lastAttempt = now();
+      state.lastSuccess = null;
+      state.inFlight = false;
+      state.failures = 0;
+      state.error = null;
+      state.stale = false;
+    },
+  };
+}
+// Pairing identity excludes outcomes and scores: a published result must never
+// be announced as a schedule change.
+function pairingFingerprint(data) {
+  const map = new Map();
+  for (const round of data?.rounds || []) {
+    for (const section of round?.sections || []) {
+      for (const ballot of section?.ballots || []) {
+        const key = JSON.stringify([
+          round?.event || "",
+          round?.id || round?.name || "",
+          ballot?.entryId ?? ballot?.entry ?? "",
+        ]);
+        map.set(key, {
+          label: [round?.event, round?.name || "Round", ballot?.entry || ballot?.entryId || "Entry"]
+            .filter(Boolean)
+            .join(" · "),
+          room: section?.room || "",
+          judge: ballot?.judge || "",
+          side: ballot?.side || "",
+        });
+      }
+    }
+  }
+  return map;
+}
+function fingerprintChanges(previous, next) {
+  const empty = { added: [], removed: [], updated: [] };
+  if (!previous || !next) return empty;
+  const changes = { added: [], removed: [], updated: [] };
+  for (const [key, value] of next) {
+    const before = previous.get(key);
+    if (!before) changes.added.push(value);
+    else if (
+      before.room !== value.room ||
+      before.judge !== value.judge ||
+      before.side !== value.side
+    )
+      changes.updated.push(value);
+  }
+  for (const [key, value] of previous)
+    if (!next.has(key)) changes.removed.push(value);
+  return changes;
+}
+function changeSummary(changes) {
+  const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
+  const parts = [];
+  if (changes.added.length) parts.push(plural(changes.added.length, "new pairing"));
+  if (changes.updated.length)
+    parts.push(plural(changes.updated.length, "updated assignment"));
+  if (changes.removed.length) parts.push(changes.removed.length + " removed");
+  return parts.join(" · ");
+}
+function syncStatusText(state, now = Date.now()) {
+  const clock = (value) =>
+    new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (state?.inFlight) return "Checking for updates…";
+  if (state?.stale || state?.failures) {
+    const elapsed = state?.lastSuccess
+      ? Math.max(1, Math.round((now - state.lastSuccess) / 60000)) +
+        " min since the last successful update"
+      : "No successful update yet";
+    return (
+      "Could not refresh · " +
+      esc(state?.error || "Source unavailable") +
+      " · " +
+      esc(elapsed) +
+      " · showing the last published data"
+    );
+  }
+  if (!state?.lastSuccess) return "Waiting for the first automatic check";
+  return "Updated " + esc(clock(state.lastSuccess)) + " · checks automatically";
+}
+const sync = createSyncController({ intervalMs: 300000 });
+function renderSyncStatus() {
+  const node = $("#sync-status");
+  if (node) node.textContent = syncStatusText(sync.state);
+}
 function route() {
   const [name = "discover", id = "", sub = "overview", event = ""] =
     location.hash.slice(1).split("/");
@@ -158,11 +287,11 @@ function hero(title, text, kicker = "YOUR NEXT ROUND STARTS HERE") {
     esc(title) +
     "</h1><p>" +
     esc(text) +
-    '</p></div><div class="hero-art" aria-hidden="true"><div class="art-card"></div><div class="art-card"></div></div></section>'
+    '</p></div><div class="debate-illustration" aria-hidden="true"><div class="debate-orbit"></div><div class="debate-bubble bubble-one">The case for.</div><div class="debate-bubble bubble-two">The case against.</div><div class="debate-stage"><div class="debate-person person-one"><i></i><b></b></div><div class="debate-person person-two"><i></i><b></b></div><div class="podium podium-one"><span>01</span></div><div class="podium podium-two"><span>02</span></div></div><span class="debate-caption">Different perspectives. One place.</span></div></section>'
   );
 }
 function sidebarHTML() {
-  return '<aside class="aside"><div class="card sidecard"><h3>Your tournament toolkit</h3><a class="linkrow" href="#judging">Judging assignments <span>→</span></a><a class="linkrow" href="#results">Rounds & results <span>→</span></a><a class="linkrow" href="#paradigms">Judge paradigms <span>→</span></a><a class="linkrow" href="#account">School & registration <span>↗</span></a></div><div class="card sidecard"><h3>Closer to home</h3><p class="sub" style="font-size:12px">Find the next tournament in your circuit.</p><button class="linkrow reset" data-cfl style="width:100%;text-decoration:none">Coast Forensic League <span>→</span></button><button class="linkrow reset" data-ca style="width:100%;text-decoration:none">California tournaments <span>→</span></button></div><div class="support-card"><strong>A calmer tournament day.</strong><p>Save a tournament to keep its entries, judges and published rounds one click away.</p><a href="#saved" style="font-size:11px;color:var(--warning)">Your saved tournaments →</a></div><div class="sync" style="padding:18px 4px">Public pages, organized.<br>Freshness is shown on every view.<br>Account actions open on Tabroom.</div></aside>';
+  return '<aside class="directory-shortcuts" aria-label="Tournament shortcuts"><div><span class="eyebrow">YOUR NEXT STEP</span><h3>Less searching. More debating.</h3></div><a href="#judging">Find judging assignments ↗</a><a href="#paradigms">Browse paradigms ↗</a><button class="reset" data-cfl>Coast Forensic League →</button><button class="reset" data-ca>California tournaments →</button></aside>';
 }
 function opts(options, value, all) {
   return (
@@ -194,7 +323,7 @@ function calendarShell() {
         : "Find your next tournament.",
       isBookmarks
         ? "The tournaments you saved, ready when you are."
-        : "The Tabroom calendar you know, with room to breathe. Search, filter and keep the tournaments that matter.",
+        : "The Tabroom calendar you know, organized for your next round. Find an event, check the details, and keep your season in view.",
     ) +
     '<div class="stats"><div class="stat"><div class="stat-icon">⚑</div><b>' +
     data.length +
@@ -664,13 +793,13 @@ async function circuitsPage() {
     if (token === routeToken) $("#app").innerHTML = errorHTML(e) + footer;
   }
 }
-async function loadTournament(id) {
+async function loadTournament(id, { background = false } = {}) {
   const token = ++routeToken;
   if (!/^\d{1,8}$/.test(id)) {
     $("#app").innerHTML = errorHTML("Invalid tournament ID");
     return;
   }
-  loading();
+  if (!background) loading();
   if (lastId !== id) {
     detailFilter = "";
     detailEvent = "";
@@ -679,22 +808,40 @@ async function loadTournament(id) {
     tournament = null;
     invitation = null;
     lastId = id;
+    pairingState = null;
+    sync.reset();
   }
+  sync.begin();
+  if (background) renderSyncStatus();
   const outcomes = await Promise.allSettled([
     api("/api/tournament?id=" + id),
     api("/api/invitation?id=" + id),
   ]);
-  if (token !== routeToken) return;
-  tournament = outcomes[0].status === "fulfilled" ? outcomes[0].value : null;
-  invitation = outcomes[1].status === "fulfilled" ? outcomes[1].value : null;
-  if (!tournament && !invitation) {
+  // A response that arrived after the user navigated away is discarded.
+  if (token !== routeToken || lastId !== id) return;
+  const nextTournament =
+    outcomes[0].status === "fulfilled" ? outcomes[0].value : null;
+  const nextInvitation =
+    outcomes[1].status === "fulfilled" ? outcomes[1].value : null;
+  if (!nextTournament && !nextInvitation) {
+    sync.fail(outcomes[0].reason);
+    // A failed background refresh keeps the last good render visible.
+    if (background) return renderSyncStatus();
     $("#app").innerHTML =
       errorHTML(outcomes[0].reason) +
       external(href(id), "Open official tournament") +
       footer;
     return;
   }
+  sync.succeed();
+  tournament = nextTournament;
+  invitation = nextInvitation;
+  const next = pairingFingerprint(tournament);
+  const changes = fingerprintChanges(pairingState, next);
+  pairingState = next;
+  const summary = background ? changeSummary(changes) : "";
   renderDetail();
+  if (summary) toast("Published pairings updated: " + summary);
 }
 function renderInvitationParagraph(text, segments) {
   if (!Array.isArray(segments)) return "<p>" + esc(text) + "</p>";
@@ -751,7 +898,7 @@ function renderDetail() {
           "</button>",
       )
       .join("") +
-    '</nav><div class="detail-layout"><section id="detail-content"></section><aside class="aside"><div class="card sidecard"><h3>Official tournament</h3>' +
+    '</nav><div class="detail-layout"><section id="detail-content"></section><aside class="aside tournament-resources"><div class="card sidecard"><h3>Official tournament</h3>' +
     external(href(id), "Invitation", "linkrow") +
     external(href(id, "fields"), "Entry lists", "linkrow") +
     external(href(id, "judges"), "Judge lists", "linkrow") +
@@ -771,7 +918,9 @@ function renderDetail() {
         esc(formatDate(d.regEnd, d.timezone)) +
         '</b></p><p class="notice">Consult the invitation for official deadlines and policies.</p></div>'
       : "") +
-    '<div class="hint"><strong>Know what is current.</strong><p>Public exports refresh at most every five minutes per cached resource. Assignments can change; verify on Tabroom.</p></div><button class="btn" id="refresh-detail" style="margin-top:18px;width:100%;justify-content:center">↻ Check for updates</button></aside></div>' +
+    '<div class="hint"><strong>Know what is current.</strong><p>This tournament updates itself from published Tabroom exports, at most every five minutes per cached resource. Assignments can change; verify on Tabroom.</p></div><p class="sync-status" id="sync-status" role="status" aria-live="polite">' +
+    esc(syncStatusText(sync.state)) +
+    '</p><button class="btn" id="refresh-detail" style="margin-top:12px;width:100%;justify-content:center">↻ Check now</button></aside></div>' +
     sourceLine(d || inv, d ? "5 min" : "10 min") +
     footer;
   document
@@ -784,7 +933,7 @@ function renderDetail() {
     save(t);
     renderDetail();
   };
-  $("#refresh-detail").onclick = () => loadTournament(id);
+  $("#refresh-detail").onclick = () => loadTournament(id, { background: true });
   const target = $("#detail-content");
   if (!d && sub !== "overview" && sub !== "resources") {
     target.innerHTML =
@@ -1709,6 +1858,7 @@ function toolPage(name) {
 async function renderRoute() {
   routeToken++;
   const r = route();
+  document.querySelectorAll(".more-nav[open]").forEach(menu => menu.removeAttribute("open"));
   $("#crumb").textContent =
     {
       discover: "Tournaments",
@@ -1791,11 +1941,16 @@ window.addEventListener("keydown", (e) => {
     }
   }
 });
+// Poll frequently but act only when the controller says a refresh is due.
 setInterval(() => {
-  if (!document.hidden) {
-    const r = route();
-    if (r.name === "tournament") loadTournament(r.id);
-  }
-}, 300000);
+  const r = route();
+  if (r.name !== "tournament" || !sync.due(document.hidden)) return;
+  loadTournament(r.id, { background: true });
+}, 15000);
+document.addEventListener("visibilitychange", () => {
+  const r = route();
+  if (!document.hidden && r.name === "tournament" && sync.due(false))
+    loadTournament(r.id, { background: true });
+});
 initTheme();
 renderRoute();
