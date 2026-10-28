@@ -106,6 +106,43 @@ export default {
         }),
       );
     }
+    if (url.pathname === "/api/rankings") {
+      const event = url.searchParams.get("event") || "";
+      const season = url.searchParams.get("season") || "";
+      if (!["LD", "PF"].includes(event))
+        return json({ error: "Unsupported event" }, 400);
+      if (!/^\d{4}-\d{4}$/.test(season))
+        return json({ error: "Invalid season" }, 400);
+      // The archive corpus is embedded only when redistribution is cleared.
+      if (typeof rankingsCorpus === "undefined" || !rankingsCorpus)
+        return json(
+          {
+            available: false,
+            reason:
+              "Historical rankings are not included in this build. See docs/rankings-sources.md.",
+          },
+          200,
+          3600,
+        );
+      const corpus = hydrateCorpus(rankingsCorpus);
+      return json(
+        {
+          available: true,
+          provider: corpus.provider,
+          methodology: corpus.methodology,
+          sourceUrl: corpus.sourceUrl,
+          retrievedAt: corpus.generatedAt,
+          window: corpus.window,
+          season,
+          event,
+          competitors: corpus.competitors.filter(
+            (c) => c.event === event && c.season === season,
+          ),
+        },
+        200,
+        3600,
+      );
+    }
     if (url.pathname === "/api/circuits")
       return cached(request, ctx, "circuits", 3600, async () => ({
         circuits: parseCircuits(await upstream("/index/circuits.mhtml")),
