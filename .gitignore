@@ -8,3 +8,4 @@ worker/
 *.tar.gz
 .DS_Store
 .wrangler/
+build/
