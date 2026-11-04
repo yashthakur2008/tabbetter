@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose an improvement grounded in tournament-day needs.
+title: 'feat: '
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: User need
+      description: Who needs this, and what are they trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+    validations:
+      required: true
+  - type: textarea
+    id: data
+    attributes:
+      label: Data and access requirements
+      description: Identify public sources or the authorization needed; avoid assuming private data is available.

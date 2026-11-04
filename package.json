@@ -1,0 +1,17 @@
+{
+  "name": "tabbetter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An independent, read-only companion for clearer debate tournament information.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "dev": "npm run build && node scripts/dev.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "check": "node scripts/check-repository.mjs",
+    "validate": "node scripts/validate-artifact.mjs"
+  }
+}

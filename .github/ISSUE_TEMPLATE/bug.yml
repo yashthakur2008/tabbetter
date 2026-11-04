@@ -1,0 +1,23 @@
+name: Bug report
+description: Report an observable problem in TabBetter.
+title: 'fix: '
+labels: ['bug']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the page, public tournament ID and expected behavior. Do not include passwords, private ballots or personal contact details.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and environment
+      description: Browser/device, retrieval timestamp and a screenshot with private details removed.
