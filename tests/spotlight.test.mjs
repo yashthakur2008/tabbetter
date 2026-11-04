@@ -98,3 +98,32 @@ test('motion-sensitive users lose transforms and the loading scan', () => {
   assert.match(reduced, /transform:\s*none/);
   assert.match(reduced, /\.loading::after\s*\{\s*animation:\s*none/);
 });
+
+test('the sticky header paints above page content', () => {
+  // The header was briefly sticky but stacked *under* the scrolling table,
+  // so rows slid over it. Position alone is not enough; it needs a z-index
+  // above the `main` stacking context that the ambient wash introduced.
+  const header = [...css.matchAll(/\.site-header\s*\{([^}]*)\}/g)]
+    .map(([, body]) => body)
+    .find((body) => body.includes('position: sticky'));
+  assert.ok(header, 'no sticky .site-header rule found');
+  const headerLayer = Number((header.match(/z-index:\s*(\d+)/) || [])[1]);
+  assert.ok(headerLayer > 0, 'sticky header needs an explicit z-index');
+
+  const mainRule = [...css.matchAll(/(^|\n)\s*main\s*\{([^}]*)\}/g)]
+    .map(([, , body]) => body)
+    .find((body) => body.includes('z-index'));
+  const mainLayer = Number(((mainRule || '').match(/z-index:\s*(\d+)/) || [])[1] || 0);
+  assert.ok(headerLayer > mainLayer, `header z-index ${headerLayer} must beat main ${mainLayer}`);
+});
+
+test('the header stays opaque enough to hide content scrolling under it', () => {
+  // Match the rule that actually paints the bar, not a later media-query tweak.
+  const block = [...css.matchAll(/\.site-header\s*\{([^}]*)\}/g)]
+    .map(([, body]) => body)
+    .find((body) => body.includes('color-mix'));
+  assert.ok(block, 'no .site-header rule sets a canvas-based background');
+  const mix = block.match(/var\(--canvas\)\s*(\d+)%/);
+  assert.ok(mix, 'header background should mix the canvas colour');
+  assert.ok(Number(mix[1]) >= 90, `header too transparent: ${mix[1]}%`);
+});

@@ -2420,15 +2420,18 @@ body::before {
     radial-gradient(45% 50% at 85% 5%, color-mix(in srgb, var(--tone-violet) 10%, transparent), transparent 72%);
   filter: blur(8px);
 }
-main, .site-header { position: relative; z-index: 1; }
+main { position: relative; z-index: 1; }
 
 /* ---------- Header: sticky glass rail ---------- */
 .site-header {
   position: sticky;
   top: 0;
-  background: color-mix(in srgb, var(--canvas) 72%, transparent);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  /* Opaque enough that scrolled rows never read through the bar; the blur is
+     an accent on the edges rather than the thing carrying legibility. */
+  z-index: 30;
+  background: color-mix(in srgb, var(--canvas) 93%, transparent);
+  backdrop-filter: saturate(170%) blur(22px);
+  -webkit-backdrop-filter: saturate(170%) blur(22px);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 .site-header-inner { padding: 14px 40px; gap: 30px; }
