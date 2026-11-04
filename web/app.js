@@ -2567,3 +2567,38 @@ document.addEventListener("visibilitychange", () => {
 });
 initTheme();
 renderRoute();
+
+// Pointer-tracked spotlight on tiles.
+//
+// Delegated from the document so it keeps working after every re-render, and
+// written as CSS custom properties so the gradient itself stays in the
+// stylesheet. Honouring reduced motion here means the CSS never has to guess.
+(function tileSpotlight() {
+  const reduced =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduced || typeof document.addEventListener !== "function") return;
+  let frame = 0;
+  let pending = null;
+  document.addEventListener(
+    "pointermove",
+    (event) => {
+      const tile =
+        event.target && event.target.closest && event.target.closest(".tile");
+      if (!tile) return;
+      pending = { tile, x: event.clientX, y: event.clientY };
+      // Coalesce to one write per frame; pointermove fires far faster than paint.
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (!pending) return;
+        const { tile: node, x, y } = pending;
+        const box = node.getBoundingClientRect();
+        if (!box.width || !box.height) return;
+        node.style.setProperty("--mx", ((x - box.left) / box.width) * 100 + "%");
+        node.style.setProperty("--my", ((y - box.top) / box.height) * 100 + "%");
+      });
+    },
+    { passive: true },
+  );
+})();
