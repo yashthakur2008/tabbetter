@@ -7,19 +7,32 @@ const rankingsSource = fs
   .readFileSync("src/rankings/corpus.mjs", "utf8")
   .replaceAll("export function ", "function ")
   .replaceAll("export const ", "const ");
+const discoverySource = fs.readFileSync("src/discovery.mjs", "utf8")
+  .replaceAll("export function ", "function ")
+  .replaceAll("export const ", "const ");
+const discoveryApiSource = fs.readFileSync("src/discovery-api.mjs", "utf8")
+  .replace(/^import .*;\n/gm, "")
+  .replaceAll("export function ", "function ");
+const discoveryScript = fs.existsSync("web/discovery.js") ? fs.readFileSync("web/discovery.js", "utf8") : "";
+const discoveryStyles = fs.existsSync("web/discovery.css") ? fs.readFileSync("web/discovery.css", "utf8") : "";
 const styles = fs.readFileSync("web/styles.css", "utf8");
 const script = fs.readFileSync("web/app.js", "utf8");
-if (/<\/script/i.test(script) || /<\/style/i.test(styles))
+if (
+  [script, discoverySource, discoveryScript].some(s => /<\/script/i.test(s)) ||
+  [styles, discoveryStyles].some(s => /<\/style/i.test(s))
+)
   throw Error("Unsafe closing tag in embedded asset");
 const page = fs
   .readFileSync("web/index.html", "utf8")
   .replace(
     /<link\s+rel="stylesheet"\s+href="\/styles.css"\s*\/?\s*>/,
-    () => "<style>" + styles + "</style>",
+    () => "<style>" + styles + "\n" + discoveryStyles + "</style>",
   )
   .replace(
     /<script\s+src="\/app.js"\s+defer><\/script>/,
-    () => "<script>" + script + "</script>",
+    // Keep app.js in its own script so existing VM extraction markers survive.
+    () => "<script>" + discoverySource + "</script><script>" + script + "</script>" +
+      (discoveryScript ? "<script>" + discoveryScript + "</script>" : ""),
   );
 if (page.includes('href="/styles.css"') || page.includes('src="/app.js"'))
   throw Error("Asset embedding failed");
@@ -41,6 +54,10 @@ fs.writeFileSync(
     corpus +
     ";\n" +
     source +
+    "\n" +
+    discoverySource +
+    "\n" +
+    discoveryApiSource +
     "\n" +
     rankingsSource +
     "\n" +
