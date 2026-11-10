@@ -11,7 +11,7 @@ function worker(fetch) {
   return path=>box.handler.fetch(new Request('https://example.test'+path),{},{waitUntil(){}});
 }
 const exported=id=>({id,public:true,name:'Published',city:'',categories:[{events:[{id:10,name:'Varsity Original Oratory'}]}]});
-const eventPage=id=>`<h2>Tournament</h2><h5>2026 &mdash; Apple Valley, MN/US</h5><h6>Events</h6><a href="events.mhtml?event_id=10&tourn_id=${id}">Novice Public Forum</a><h6>Circuits</h6><a href="/index/circuit/index.mhtml?circuit_id=28">Minnesota Speech &amp; Debate</a>`;
+const eventPage=id=>`<div class="main"><h2>Tournament</h2><h5>2026 &mdash; Apple Valley, MN/US</h5></div><div class="menu"><div class="sidenote"><h6>General</h6><a href="/index/tourn/main.mhtml?tourn_id=${id}">Invitation Home</a><a href="/index/tourn/events.mhtml?tourn_id=${id}">Events &amp; Divisions</a><h6>Events</h6><a href="events.mhtml?event_id=10&tourn_id=${id}">Novice Public Forum</a><h6>Circuits</h6><a href="/index/circuit/index.mhtml?circuit_id=28">Minnesota Speech &amp; Debate</a></div></div>`;
 const candidate={id:1,feature_code:'PPL',name:'Apple Valley',admin1:'Minnesota',country:'United States',country_code:'US',latitude:44.73,longitude:-93.21};
 
 test('invalid discovery IDs and unexpected coordinates never touch upstream',async()=>{
@@ -128,4 +128,38 @@ test('manual two-part country qualifier forwards countryCode rather than treatin
   assert.equal((await get('/api/locations?q=Paris%2C%20FR')).status,200);
   assert.equal(requested.searchParams.get('countryCode'),'FR');
   assert.equal(requested.searchParams.get('name'),'Paris');
+});
+
+async function pageItem(page,id='8') {
+  const get=worker(async url=>String(url).includes('open-meteo')?Response.json({results:[candidate]}):String(url).includes('download_data')?new Response('',{status:403}):new Response(page));
+  return (await (await get('/api/discovery?ids='+id)).json()).items[0];
+}
+test('R2 unrelated body/navigation circuit links are not membership evidence',async()=>{
+  const unrelated='<a href="/index/circuit/index.mhtml?circuit_id=999">Unrelated Circuit</a>';
+  const page=unrelated+eventPage('8').replace('<h6>Events</h6>',unrelated+'<h6>Events</h6>')+unrelated;
+  const item=await pageItem(page);
+  assert.deepEqual(item.circuits.map(c=>c.id),['28']);
+  assert.equal(item.coordinates.latitude,candidate.latitude);
+});
+test('R2 wrong-tournament documents and unidentified headings supply no metadata',async()=>{
+  for(const page of [eventPage('999'),'<h5>2026 &mdash; Apple Valley, MN/US</h5><a href="events.mhtml?tourn_id=8&event_id=10">PF</a><h6>Circuits</h6><a href="/index/circuit/index.mhtml?circuit_id=999">Other Circuit</a>',eventPage('8').replace('<h2>Tournament</h2>','')]) {
+    const item=await pageItem(page);
+    assert.equal(item.status,'unavailable');assert.deepEqual(item.events,[]);assert.deepEqual(item.circuits,[]);assert.equal(item.coordinates,null);
+  }
+});
+test('R2 only the identified tournament header supplies location and circuit section ends at next heading',async()=>{
+  const page='<h5>2026 &mdash; Wrong City, CA/US</h5>'+eventPage('8').replace('</div></div>','<h6>Other links</h6><a href="/index/circuit/index.mhtml?circuit_id=999">Other circuit</a></div></div>');
+  const item=await pageItem(page);
+  assert.equal(item.coordinates.latitude,candidate.latitude);
+  assert.deepEqual(item.circuits.map(c=>c.id),['28']);
+});
+test('R3 exact quote-aware href parsing rejects data attributes and quoted decoys',async()=>{
+  for(const attribute of ['data-href','not-href','title="decoy href=\'fake\'" data-href']) {
+    let page=eventPage('8').replace('href="events.mhtml?event_id=',attribute+'="events.mhtml?event_id=').replace('href="/index/circuit/',attribute+'="/index/circuit/');
+    const item=await pageItem(page);
+    assert.equal(item.status,'unavailable');assert.deepEqual(item.events,[]);assert.deepEqual(item.circuits,[]);
+  }
+  const page=eventPage('8').replace('href="events.mhtml?event_id=10&tourn_id=8"',`title="decoy href='events.mhtml?event_id=99&tourn_id=8' >" href='events.mhtml?event_id=10&amp;tourn_id=8'`).replace('href="/index/circuit/index.mhtml?circuit_id=28"',`title="href='/index/circuit/index.mhtml?circuit_id=999' >" href='/index/circuit/index.mhtml?circuit_id=28'`);
+  const item=await pageItem(page);
+  assert.equal(item.events[0].id,'10');assert.deepEqual(item.circuits.map(c=>c.id),['28']);
 });

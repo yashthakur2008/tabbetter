@@ -31,7 +31,10 @@ function discoveryLabel(value) {
   return String(value ?? '').toLowerCase().replace(/[–—-]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 function discoveryEventKey(value) {
-  return discoveryLabel(value).replace(/^(?:(?:varsity|junior varsity|jv|novice|open|middle school|high school)\s+)+/, '').trim();
+  return discoveryLabel(value)
+    .replace(/^(?:(?:varsity|junior varsity|jv|novice|open|middle school|high school)\s+)+/, '')
+    .replace(/(?:\s+(?:varsity|junior varsity|jv|novice|open|middle school|high school))+$/, '')
+    .trim();
 }
 export function classifyEvents(events) {
   const result = new Map();

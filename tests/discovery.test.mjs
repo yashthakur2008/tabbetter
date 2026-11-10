@@ -47,3 +47,12 @@ test('query and stable date/name/id ties are deterministic regardless of input o
   assert.deepEqual(discoverTournaments(ties,{},{}).map(r=>r.id),['1','2']);
   assert.deepEqual(discoverTournaments([...ties].reverse(),{},{}),discoverTournaments(ties,{},{}));
 });
+
+test('bounded division suffixes preserve offered categories without substring false positives',()=>{
+  const names=['Public Forum Open','Lincoln Douglas Open','Original Oratory Novice','Varsity Public Forum Open'];
+  assert.deepEqual(names.map(n=>classifyEvents([n])[0].id),['pf','ld','oo','pf']);
+  assert.equal(classifyEvents([names[0]])[0].sourceLabel,names[0]);
+  for(const name of ['Not PF at all','Public Forum Workshop','Original Oratory Novice Workshop']) assert.equal(classifyEvents([name])[0].group,'other');
+  const results=discoverTournaments([{id:'41209'}],{'41209':{status:'available',events:names}},{eventIds:['pf','ld','oo'],eventMatch:'all'});
+  assert.equal(results.length,1);assert.equal(results[0].discovery.eventMatches,3);
+});

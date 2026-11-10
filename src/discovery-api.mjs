@@ -5,6 +5,61 @@ const discoveryRegions = Object.fromEntries('AL:Alabama|AK:Alaska|AZ:Arizona|AR:
 const discoveryPlaceKey = value => String(value || '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 const discoverySafeLabel = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 160 && !/[<>\x00-\x1f\x7f]/.test(value);
 
+// Small evidence tokenizer, not an HTML renderer. Tag boundaries and attributes
+// are quote-aware. Raw elements/comments never contribute source evidence.
+function discoveryElements(html) {
+  const nodes = [], stack = [];
+  let i = 0;
+  while (i < html.length) {
+    const start = html.indexOf('<', i);
+    if (start < 0) break;
+    if (html.startsWith('<!--', start)) {
+      const end = html.indexOf('-->', start + 4);
+      i = end < 0 ? html.length : end + 3;
+      continue;
+    }
+    const match = /^<(\/?)([a-z][a-z0-9:-]*)(?=[\s/>])/i.exec(html.slice(start));
+    if (!match) { i = start + 1; continue; }
+    let end = start + match[0].length, quote = '';
+    for (; end < html.length; end++) {
+      const char = html[end];
+      if (quote) { if (char === quote) quote = ''; }
+      else if (char === '"' || char === "'") quote = char;
+      else if (char === '>') break;
+    }
+    if (end === html.length) break;
+    const tag = match[2].toLowerCase();
+    i = end + 1;
+    if (match[1]) {
+      const index = stack.findLastIndex(node => node.tag === tag);
+      if (index >= 0) {
+        stack[index].end = start;
+        stack.length = index;
+      }
+      continue;
+    }
+    if (['script','style','textarea','template','noscript','iframe','title','xmp','noembed','noframes'].includes(tag)) {
+      const close = new RegExp('<\\/' + tag + '\\s*>', 'ig');
+      close.lastIndex = i;
+      const found = close.exec(html);
+      i = found ? close.lastIndex : html.length;
+      continue;
+    }
+    const attrs = Object.create(null);
+    const source = html.slice(start + match[0].length, end);
+    for (const attribute of source.matchAll(/([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) {
+      const name = attribute[1].toLowerCase();
+      // First exact attribute wins, like HTML. data-href and quoted decoys
+      // remain separate attributes rather than supplying navigation evidence.
+      if (!(name in attrs)) attrs[name] = clean(attribute[2] ?? attribute[3] ?? attribute[4] ?? '');
+    }
+    const node = {tag, attrs, start: i, end: i, parent: stack.at(-1) || null};
+    nodes.push(node);
+    if (!['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'].includes(tag) && !/\/\s*$/.test(source)) stack.push(node);
+  }
+  return nodes;
+}
+
 // One instance per worker isolate. No visitor coordinates, cookies or credentials.
 export function createDiscoveryApi() {
   const metadata = new Map(), pendingMetadata = new Map(), pendingPlaces = new Map(), cityCache = new Map();
@@ -96,23 +151,47 @@ export function createDiscoveryApi() {
     } catch { return null; }
   }
   function publicPage(html, id) {
-    // Embedded scripts/comments are not published links. Treat unclosed raw
-    // elements as unavailable through the end of the document.
-    html = html.replace(/<!--[\s\S]*?(?:-->|$)/g, '')
-      .replace(/<(script|style|textarea|template|noscript|iframe)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, '');
+    const empty = { events: [], circuits: [], city: '', state: '', country: '' };
+    const nodes = discoveryElements(html);
+    const hasClass = (node, name) => node?.tag === 'div' && (node.attrs.class || '').split(/\s+/).includes(name);
+    const label = node => clean(html.slice(node.start, node.end));
+    const link = node => {
+      if (node.tag !== 'a' || !node.attrs.href) return null;
+      try {
+        const url = new URL(node.attrs.href, 'https://www.tabroom.com/index/tourn/');
+        return url.origin === 'https://www.tabroom.com' ? url : null;
+      } catch { return null; }
+    };
+    const mains = nodes.filter(node => hasClass(node, 'main'));
+    if (mains.length !== 1) return empty;
+    const header = nodes.filter(node => node.parent === mains[0]);
+    const title = header.findIndex(node => node.tag === 'h2' && discoverySafeLabel(label(node)));
+    if (title < 0 || header[title + 1]?.tag !== 'h5') return empty;
+
+    // The same published sidebar must identify this tournament via both its
+    // Invitation Home and Events & Divisions links. Never trust a random event
+    // link, an unrelated heading, or another tournament's affiliation block.
+    const sidebars = nodes.filter(node => hasClass(node, 'sidenote') && hasClass(node.parent, 'menu'));
+    const identified = sidebars.filter(sidebar => {
+      const links = nodes.filter(node => node.parent === sidebar && node.tag === 'a');
+      return [['Invitation Home', '/index/tourn/main.mhtml'], ['Events & Divisions', '/index/tourn/events.mhtml']].every(([text, path]) => {
+        const matches = links.filter(node => label(node) === text);
+        return matches.length === 1 && link(matches[0])?.pathname === path && link(matches[0])?.searchParams.get('tourn_id') === id;
+      });
+    });
+    if (identified.length !== 1) return empty;
     const events = new Map(), circuits = new Map();
-    for (const match of html.matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
-      let url;
-      try { url = new URL(match[1].replace(/&amp;/g, '&'), 'https://www.tabroom.com/index/tourn/'); } catch { continue; }
-      if (url.origin !== 'https://www.tabroom.com') continue;
-      const label = clean(match[2]); if (!discoverySafeLabel(label)) continue;
+    let section = '';
+    for (const node of nodes.filter(node => node.parent === identified[0])) {
+      if (/^h[1-6]$/.test(node.tag)) { section = node.tag === 'h6' ? label(node) : ''; continue; }
+      const url = link(node), text = label(node);
+      if (!url || !discoverySafeLabel(text)) continue;
       const eventId = url.searchParams.get('event_id');
-      if (url.pathname === '/index/tourn/events.mhtml' && url.searchParams.get('tourn_id') === id && /^[1-9]\d{0,8}$/.test(eventId || '')) events.set(eventId, { id: eventId, name: label });
+      if (section === 'Events' && url.pathname === '/index/tourn/events.mhtml' && url.searchParams.get('tourn_id') === id && /^[1-9]\d{0,8}$/.test(eventId || '')) events.set(eventId, { id: eventId, name: text });
       const circuitId = url.searchParams.get('circuit_id');
-      if (url.pathname === '/index/circuit/index.mhtml' && /^[1-9]\d{0,7}$/.test(circuitId || '')) circuits.set(circuitId, { id: circuitId, label, sourceUrl: url.href });
+      if (section === 'Circuits' && url.pathname === '/index/circuit/index.mhtml' && /^[1-9]\d{0,7}$/.test(circuitId || '')) circuits.set(circuitId, { id: circuitId, label: text, sourceUrl: url.href });
     }
-    const heading = clean(html.match(/<h5\b[^>]*>([\s\S]*?)<\/h5>/i)?.[1]);
-    const place = /^\d{4}\s*[—–-]\s*(.+),\s*([A-Za-z ]+)(?:\/([A-Za-z]{2}))?$/.exec(heading);
+    const place = /^\d{4}\s*[—–-]\s*(.+),\s*([A-Za-z ]+)(?:\/([A-Za-z]{2}))?$/.exec(label(header[title + 1]));
     return { events: [...events.values()], circuits: [...circuits.values()], city: place?.[1] || '', state: place?.[3] ? place[2] : '', country: place?.[3] || (place?.[2]?.length === 2 ? place[2] : '') };
   }
   async function enrich(id) {
