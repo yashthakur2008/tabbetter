@@ -62,8 +62,8 @@ test('manual geocoder validates input, bounds results, filters qualifier and kee
   await get('/api/locations?q=San%20Jose%2C%20CA'); assert.equal(urls.length,2);
 });
 test('manual geocoder returns controlled errors for malformed responses, upstream failure and timeout',async()=>{
-  for(const fetch of [async()=>{throw Error('timeout secret');},async()=>new Response('',{status:429}),async()=>Response.json({results:'bad'}),async()=>Response.json({results:[{...candidate,latitude:95}]}),async()=>Response.json({results:[{...candidate,name:'<script>'}]})]) {
-    const r=await worker(fetch)('/api/locations?q=Boston'); assert.equal(r.status,502); assert.doesNotMatch(await r.text(),/secret|<script>/);
+  for(const fetch of [async()=>{throw Error('timeout secret');},async()=>{throw Error('TIMEOUT SECRET');},async()=>new Response('',{status:429}),async()=>Response.json({results:'bad'}),async()=>Response.json({results:[{...candidate,latitude:95}]}),async()=>Response.json({results:[{...candidate,name:'<script>'}]}),async()=>Response.json({results:[{...candidate,name:'<SCRIPT>'}]})]) {
+    const r=await worker(fetch)('/api/locations?q=Boston'); assert.equal(r.status,502); assert.doesNotMatch(await r.text(),/secret|<script>/i);
   }
 });
 test('all discovery and geocoding upstream requests share a three-request limit',async()=>{
@@ -78,7 +78,9 @@ test('compiler embeds shared source before legacy app and guards new embedded as
   assert.ok(html.indexOf('const DISCOVERY_EVENTS')<html.indexOf('const $ ='));
   const compiler=fs.readFileSync('scripts/compile.mjs','utf8');
   assert.match(compiler,/discovery\.js/);assert.match(compiler,/discovery\.css/);
-  const dir=fs.mkdtempSync((process.env.JCODE_SCRATCH_DIR || process.cwd()+'/build')+'/discovery-compile-');
+  const parent=process.env.JCODE_SCRATCH_DIR || process.cwd()+'/build';
+  fs.mkdirSync(parent,{recursive:true});
+  const dir=fs.mkdtempSync(parent+'/discovery-compile-');
   try {
     for(const path of ['src','web','assets','scripts'])fs.cpSync(path,dir+'/'+path,{recursive:true});
     for(const [file,payload] of [['src/discovery.mjs','// </script>'],['web/discovery.js','// </script>'],['web/discovery.css','/* </style> */']]){
@@ -87,7 +89,10 @@ test('compiler embeds shared source before legacy app and guards new embedded as
       assert.throws(()=>execFileSync(process.execPath,['scripts/compile.mjs'],{cwd:dir,stdio:'pipe'}),/Command failed/);
       if(old)fs.writeFileSync(path,old);else fs.unlinkSync(path);
     }
-  } finally {fs.rmSync(dir,{recursive:true,force:true});}
+  } finally {
+    // Remove only this test's unique child, never a shared scratch/build parent.
+    fs.rmSync(dir,{recursive:true,force:true});
+  }
 });
 
 test('successful exports still enrich published circuit links, without mistaking title claims for affiliations',async()=>{
@@ -162,4 +167,26 @@ test('R3 exact quote-aware href parsing rejects data attributes and quoted decoy
   const page=eventPage('8').replace('href="events.mhtml?event_id=10&tourn_id=8"',`title="decoy href='events.mhtml?event_id=99&tourn_id=8' >" href='events.mhtml?event_id=10&amp;tourn_id=8'`).replace('href="/index/circuit/index.mhtml?circuit_id=28"',`title="href='/index/circuit/index.mhtml?circuit_id=999' >" href='/index/circuit/index.mhtml?circuit_id=28'`);
   const item=await pageItem(page);
   assert.equal(item.events[0].id,'10');assert.deepEqual(item.circuits.map(c=>c.id),['28']);
+});
+
+test('browser harness HTTP failures hide diagnostics from clients but log them server-side', async () => {
+  const source = fs.readFileSync('scripts/test-discovery-browser.cjs','utf8');
+  const start = source.indexOf('  const server = http.createServer(');
+  const end = source.indexOf('  let browser;',start);
+  assert.ok(start >= 0 && end > start);
+  let handle;
+  const diagnostic = Error('SECRET <SCRIPT> internal worker failure');
+  const logged = [];
+  const box = vm.createContext({Request, Buffer,
+    http:{createServer(callback){handle=callback;}},
+    worker:{async fetch(){throw diagnostic;}},
+    console:{error(...args){logged.push(args);}},
+  });
+  vm.runInContext(source.slice(start,end),box);
+  let status, body;
+  await handle({url:'/'},{writeHead(code){status=code;},end(text){body=text;}});
+  assert.equal(status,500);
+  assert.doesNotMatch(body,/secret|<script>|internal worker failure/i);
+  assert.equal(body,'Internal server error');
+  assert.ok(logged.some(args=>args.includes(diagnostic)),'original exception retained in server diagnostics');
 });

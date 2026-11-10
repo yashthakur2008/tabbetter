@@ -81,7 +81,11 @@ async function checkDeniedLocation(browser, baseURL) {
       const result = await worker.fetch(new Request('http://127.0.0.1' + req.url), {}, { waitUntil: p => p.catch(() => {}) });
       res.writeHead(result.status, Object.fromEntries(result.headers));
       res.end(Buffer.from(await result.arrayBuffer()));
-    } catch (e) { res.writeHead(500); res.end(String(e)); }
+    } catch (e) {
+      console.error('Browser test server request failed:', e);
+      res.writeHead(500);
+      res.end('Internal server error');
+    }
   });
   let browser;
   try {
