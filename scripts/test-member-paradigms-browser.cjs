@@ -63,13 +63,14 @@ async function checkMember(page, tournamentId, registration, personId) {
   const worker = (await import(pathToFileURL(path.resolve(__dirname, '../worker/index.js')).href)).default;
   const originalFetch = globalThis.fetch;
   const upstreamCalls = [];
-  globalThis.fetch = async input => {
+  globalThis.fetch = async (input, init) => {
     const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
     upstreamCalls.push(url.href);
     assert.equal(url.hostname, 'www.tabroom.com');
     if (url.pathname === '/api/download_data.mhtml' && url.searchParams.get('tourn_id') === '91001') return Response.json(raw);
     if (url.pathname === '/api/download_data.mhtml' && url.searchParams.get('tourn_id') === '41209' && process.argv.includes('--live'))
-      return originalFetch(url, { signal: AbortSignal.timeout(30000) });
+      // Preserve the worker's manual redirects, identifying header and deadline.
+      return originalFetch(input, init);
     if (url.pathname === '/index/tourn/main.mhtml') return new Response('<h2>Fixture invitation</h2><p>Public fixture invitation only.</p>');
     return new Response('Source unavailable', { status: 503 });
   };
