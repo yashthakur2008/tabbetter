@@ -1626,6 +1626,7 @@ function drawPeople(sub) {
       Object.values(r).join(" ").toLowerCase().includes(q),
   );
   const visible = rows.slice(0, 300);
+  const judgeIdentities = sub === "judges" ? publishedJudgeIdentities() : null;
   $("#people-list").innerHTML =
     '<p class="smalltext">' +
     rows.length +
@@ -1645,6 +1646,10 @@ function drawPeople(sub) {
               '<tr><td>' +
               memberLink(sub === "entries" ? "entry:" + r.id : "judge:" + judgeRecordKey(r),
                 sub === "entries" ? r.code || r.name : r.name) +
+              (judgeIdentities?.get(judgeRecordKey(r))?.paradigm
+                ? ' · ' + external(official + '/index/paradigm.mhtml?judge_person_id=' +
+                  judgeIdentities.get(judgeRecordKey(r)).paradigm,
+                  'Paradigm on Tabroom (login required)', 'paradigm-link') : '') +
               (sub === "entries" && r.name && r.name !== r.code
                 ? '<div class="smalltext">' + esc(r.name) + "</div>"
                 : "") +
@@ -1842,6 +1847,23 @@ function memberJudgeKey(ballot) {
   return ballot.judgeId ? "registration:" + ballot.judgeId
     : judgePersonId(ballot) ? "person:" + judgePersonId(ballot) : "";
 }
+// One pass per view, keyed only by explicit published identity. A conflict stays
+// unresolved even if a later ballot repeats one of the conflicting person IDs.
+function publishedJudgeIdentities() {
+  const identities = new Map();
+  for (const round of tournament.rounds)
+    for (const section of round.sections || [])
+      for (const ballot of section.ballots || []) {
+        const key = memberJudgeKey(ballot);
+        if (!key) continue;
+        if (!identities.has(key)) identities.set(key, { sample: ballot, paradigm: "" });
+        const identity = identities.get(key);
+        const id = judgePersonId(ballot);
+        if (id && identity.paradigm !== null)
+          identity.paradigm = identity.paradigm && identity.paradigm !== id ? null : id;
+      }
+  return identities;
+}
 // Member records reorganize published ballots by participant.
 // They never assert an official win-loss record, only the votes the export states.
 function memberAppearances(kind, key) {
@@ -1879,13 +1901,13 @@ function memberIdentity(kind, key) {
     return ballot ? { title: ballot.entry, subtitle: "Entry details not published" } : null;
   }
   if (kind !== "judge" || !/^(registration|person):.+/.test(key)) return null;
-  const sample = tournament.rounds.flatMap(r => r.sections || []).flatMap(s => s.ballots || [])
-    .find(b => memberJudgeKey(b) === key);
+  const published = publishedJudgeIdentities().get(key);
+  const sample = published?.sample;
   const judge = tournament.judges.find(j => "registration:" + j.id === key);
   if (!judge && !sample) return null;
   return { title: judge?.name || sample.judge || "Judge not published",
     subtitle: [judge?.school, judge?.category].filter(Boolean).join(" · "),
-    paradigm: sample ? judgePersonId(sample) : "" };
+    paradigm: published?.paradigm || "" };
 }
 function memberVoteBadge(outcome) {
   const label = outcome === "bye" ? "Bye" : outcome === "unpublished" ? "Not published" : outcome.toUpperCase();

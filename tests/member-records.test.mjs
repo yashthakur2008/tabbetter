@@ -221,3 +221,64 @@ test('record styles provide identifiable links, focus and scrollable tables', ()
   assert.match(css, /\.record-table:focus-visible\s*\{[^}]*outline:/s);
   assert.match(css, /\.record-table\s*\{[^}]*overflow-x: auto/s);
 });
+
+// Catch shortcut omission, first-ballot guessing and accidental name joins.
+const paradigmCases = [
+  { name: 'explicit matching person ID', ids: ['881819'], want: '881819' },
+  { name: 'absent person IDs', ids: ['', null], want: '' },
+  { name: 'invalid person IDs', ids: ['0', '-1', '01', '1.5', '1e3', ' 123', '123&x=1'], want: '' },
+  { name: 'duplicate same person ID', ids: ['881819', '881819'], want: '881819' },
+  { name: 'conflicting person IDs', ids: ['881819', '881820', '881819'], want: '' },
+  { name: 'first missing and later valid across rounds', ids: ['', '881819'], want: '881819' },
+  { name: 'invalid then valid', ids: ['0', '881819'], want: '881819' },
+  { name: 'unmatched registration despite identical name', ids: ['881819'], registration: 'other', want: '' },
+  { name: 'absent registration despite identical name', ids: ['881819'], registration: '', want: '' },
+];
+function paradigmFixture({ ids, registration = 'j1' }) {
+  const f = fixture();
+  f.rounds = ids.map((id, i) => ({ ...f.rounds[0], id: 'round' + i, sections: [{
+    ...f.rounds[0].sections[0], ballots: [{ ...ballot('A', 1, 1, 'Judge A', registration), judgePersonId: id }],
+  }] }));
+  return f;
+}
+for (const scenario of paradigmCases) {
+  for (const view of ['roster', 'member']) test(`${view} paradigm: ${scenario.name}`, () => {
+    const a = app();
+    a.context.fx = paradigmFixture(scenario);
+    vm.runInContext('tournament = fx', a.context);
+    const html = view === 'roster'
+      ? (vm.runInContext('drawPeople("judges")', a.context), a.node('#people-list').innerHTML)
+      : vm.runInContext('renderMemberRecord("judge", "registration:j1")', a.context);
+    if (view === 'roster') assert.match(html, /href="#tournament\/1\/member\/judge:registration:j1"/);
+    if (scenario.want) {
+      assert.match(html, new RegExp('href="https://www.tabroom.com/index/paradigm.mhtml\\?judge_person_id=' + scenario.want + '"'));
+      assert.match(html, /target="_blank" rel="noopener(?: noreferrer)?"/);
+      assert.match(html, /login required/);
+      assert.equal((html.match(/class="paradigm-link"/g) || []).length, 1);
+    } else assert.doesNotMatch(html, /paradigm-link|judge_person_id=/);
+  });
+}
+test('same-name roster registrations keep distinct paradigm IDs', () => {
+  const a = app();
+  a.context.fx = paradigmFixture({ ids: ['881819', '881820'] });
+  a.context.fx.rounds[1].sections[0].ballots[0].judgeId = 'j2';
+  a.context.fx.judges.push({ ...a.context.fx.judges[0], id: 'j2' });
+  vm.runInContext('tournament = fx; drawPeople("judges")', a.context);
+  const rows = a.node('#people-list').innerHTML.match(/<tr><td>[\s\S]*?<\/tr>/g);
+  assert.match(rows[0], /registration:j1[\s\S]*judge_person_id=881819/);
+  assert.doesNotMatch(rows[0], /881820/);
+  assert.match(rows[1], /registration:j2[\s\S]*judge_person_id=881820/);
+  assert.doesNotMatch(rows[1], /881819/);
+});
+test('roster lookup scans published ballots once rather than per judge row', () => {
+  const a = app();
+  const f = paradigmFixture({ ids: ['881819'] });
+  f.judges = Array.from({ length: 100 }, (_, i) => ({ ...f.judges[0], id: i ? 'j' + (i + 1) : 'j1' }));
+  let reads = 0;
+  const ballots = f.rounds[0].sections[0].ballots;
+  Object.defineProperty(f.rounds[0].sections[0], 'ballots', { get() { reads++; return ballots; } });
+  a.context.fx = f;
+  vm.runInContext('tournament = fx; drawPeople("judges")', a.context);
+  assert.match(a.node('#people-list').innerHTML, /judge_person_id=881819/);
+  assert.equal(reads, 1);
+});
