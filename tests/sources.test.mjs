@@ -32,7 +32,7 @@ test('NPDL prose rows and malformed points are discarded', () => {
 
 test('NPDL is declared as a team ranking so it is never shown as an individual rating', () => {
   assert.equal(NPDL.entryKind, 'team');
-  assert.match(NPDL.sourceUrl, /parliamentarydebate\.org/);
+  assert.equal(new URL(NPDL.sourceUrl).hostname, 'www.parliamentarydebate.org');
   assert.equal(NPDL.event, 'Parliamentary');
   assert.match(NPDL.methodology, /point/i);
 });
