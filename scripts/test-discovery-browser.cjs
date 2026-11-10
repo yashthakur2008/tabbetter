@@ -8,7 +8,7 @@ const { pathToFileURL } = require('node:url');
 const { chromium } = require(process.env.TABBETTER_PLAYWRIGHT_MODULE || 'playwright');
 
 const records = [
-  { id: '91001', name: 'Bay Speech Invitational', city: 'San Jose', state: 'CA', country: 'US', events: ['Original Oratory', 'Dramatic Interpretation'], online: false },
+  { id: '91001', name: 'Bay Speech Invitational', city: 'San Jose', state: 'CA', country: 'US', events: ['Original Oratory', 'Dramatic Interpretation', 'Radio Broadcasting'], online: false },
   { id: '91002', name: 'Coast Debate Open', city: 'San Francisco', state: 'CA', country: 'US', events: ['Public Forum', 'Lincoln-Douglas'], online: false },
   { id: '91003', name: 'National Online Showcase', city: 'Online', state: '', country: 'US', events: ['Original Oratory', 'Public Forum'], online: true },
   { id: '91004', name: 'Unpublished Events Invitational', city: 'Unspecified', state: '', country: '', events: [], unavailable: true },
@@ -92,6 +92,10 @@ function exportFixture(record) {
     assert.equal(await page.locator('#discovery-preview').evaluate(d=>d.open), true);
     assert.match(await page.locator('#discovery-preview-content').innerText(), /Original Oratory/);
     assert.equal(await page.locator('#discovery-preview a[href="#tournament/91001"]').count(),1);
+    for(let tab=0;tab<8;tab++) {
+      await page.keyboard.press('Tab');
+      assert.equal(await page.evaluate(()=>document.querySelector('#discovery-preview').contains(document.activeElement)),true,'modal traps tab focus');
+    }
     await page.locator('#discovery-preview [data-discovery-save="91001"]').click();
     assert.equal(await page.locator('#discovery-preview').evaluate(d=>d.open),true,'save keeps preview open');
     await page.keyboard.press('Escape');
@@ -101,6 +105,14 @@ function exportFixture(record) {
     assert.equal(await page.locator('#discovery-search').evaluate(e=>e===document.activeElement),true);
     await page.locator('#discovery-search').fill('Coast');
     await expectIds(['91002']);
+    await page.locator('#discovery-actions > summary').click();
+    const downloadPromise=page.waitForEvent('download');
+    await page.locator('#discovery-export').click();
+    const download=await downloadPromise;
+    const csv=require('node:fs').readFileSync(await download.path(),'utf8');
+    assert.match(csv,/Coast Debate Open/);
+    assert.doesNotMatch(csv,/Bay Speech Invitational|National Online Showcase/,'CSV follows current discovery filters');
+    await page.locator('#discovery-actions > summary').click();
     await page.locator('#discovery-clear-all').click();
     await page.locator('#discovery-circuit_id').selectOption('67');
     await expectIds(['91001','91002']);
@@ -188,6 +200,21 @@ function exportFixture(record) {
     await geoPage.goBack();
     await geoPage.locator('.discovery-workspace').waitFor();
     assert.equal(await geoPage.locator('#discovery-radius').isDisabled(),true,'back navigation clears ephemeral location');
+    await geoPage.locator('#discovery-events > summary').click();
+    assert.equal(await geoPage.locator('#discovery-other-events input').count(),1,'cached remount restores published regional choices');
+    await geoPage.locator('#discovery-events > summary').click();
+    let releaseCalendar, calendarStarted;
+    const calendarGate=new Promise(resolve=>{releaseCalendar=resolve;});
+    const calendarStart=new Promise(resolve=>{calendarStarted=resolve;});
+    await geoPage.route('**/api/calendar?*',async request=>{calendarStarted();await calendarGate;await request.continue().catch(()=>{});});
+    await geoPage.locator('#discovery-circuit_id').selectOption('67');
+    await calendarStart;
+    await geoPage.locator('[data-nav="saved"]').click();
+    await geoPage.locator('[data-nav="discover"]').click();
+    assert.equal(await geoPage.locator('[data-discovery-row="91003"]').count(),0,'pending circuit remount must not expose unfiltered rows');
+    releaseCalendar();
+    await geoPage.waitForFunction(()=>document.querySelectorAll('[data-discovery-row]').length===2);
+    assert.deepEqual(await geoPage.locator('[data-discovery-row]').evaluateAll(nodes=>nodes.map(n=>n.dataset.discoveryRow)),['91001','91002']);
     await geoContext.close();
     const deniedContext = await browser.newContext();
     const deniedPage = await deniedContext.newPage();
