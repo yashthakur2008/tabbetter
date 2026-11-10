@@ -162,6 +162,18 @@ function discoveryUnchecked() {
   // event-filter matches (unknown events must remain checkable).
   return discoverTournaments(discoveryBase(), {}, {query:filter.q}).filter(t => !discoveryState.metadata[t.id]);
 }
+function discoveryRenderOtherEvents() {
+  if (!discoveryActive()) return;
+  const others = new Map();
+  for (const item of Object.values(discoveryState.metadata)) {
+    for (const event of classifyEvents(item.events)) {
+      if (event.group === 'other') others.set(event.id,event);
+    }
+  }
+  $('#discovery-other-events').innerHTML = others.size
+    ? discoveryEventChoices([...others.values()])
+    : 'No other regional labels in checked details yet.';
+}
 async function discoveryJSON(url, controller, options = {}) {
   const response = await fetch(url, {signal:controller.signal, ...options});
   if (!response.ok) throw Error('Public data is temporarily unavailable.');
@@ -188,9 +200,7 @@ async function discoveryCheckNext(retry = false) {
   } finally {
     if (generation === discoveryState.metadataGeneration && discoveryActive()) {
       discoveryState.metadataBusy = false;
-      const others = new Map();
-      for (const item of Object.values(discoveryState.metadata)) for (const event of classifyEvents(item.events)) if (event.group === 'other') others.set(event.id,event);
-      $('#discovery-other-events').innerHTML = others.size ? discoveryEventChoices([...others.values()]) : 'No other regional labels in checked details yet.';
+      discoveryRenderOtherEvents();
       discoveryDrawResults();
       discoveryUpdatePreview();
     }
@@ -280,6 +290,10 @@ async function discoveryReloadCalendar() {
   const params = new URLSearchParams();
   for (const key of discoveryServerFilters) if (filter[key]) params.set(key,filter[key]);
   discoveryState.calendarBusy = true;
+  // Filters already describe the requested selection. The previous calendar
+  // must not become reusable if route departure aborts this replacement.
+  // Published selector choices remain in the mounted controls until success.
+  calendar = null;
   $('#discovery-calendar-status').textContent = 'Loading this calendar selection…';
   $('#discovery-results').setAttribute('aria-busy','true');
   $('#discovery-results').innerHTML = '';
@@ -299,7 +313,7 @@ async function discoveryReloadCalendar() {
   } catch (error) {
     if (!discoveryActive() || generation !== discoveryState.calendarGeneration || token !== routeToken) return;
     // Never present a previous circuit's results as this selection's matches.
-    calendar = {tournaments:[],filters:calendar?.filters || {}};
+    calendar = null;
     $('#discovery-source').innerHTML = '';
     $('#discovery-calendar-status').innerHTML = 'Calendar unavailable for these filters. <button id="discovery-retry">Try again</button> <a href="https://www.tabroom.com/index/index.mhtml">Official calendar ↗</a>';
   } finally {
@@ -379,6 +393,22 @@ function discoverySave(id) {
 function discoveryKeydown(event) {
   if (!discoveryActive() || event.isComposing) return;
   const active = document.activeElement;
+  const dialog = $('#discovery-preview');
+  if (event.key === 'Tab' && dialog.open) {
+    // Native modality makes the page inert, but browsers can still move Tab
+    // into their chrome after the last control. Keep the preview's cycle local.
+    const controls = [...dialog.querySelectorAll('button:not(:disabled), a[href]')];
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+    return;
+  }
   const editable = ['INPUT','TEXTAREA','SELECT'].includes(active?.tagName) || active?.isContentEditable;
   if ((event.key === '/' || ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k')) && !editable && !$('#discovery-preview').open) {
     event.preventDefault();
@@ -506,6 +536,7 @@ function renderDiscoveryWorkspace() {
   window.addEventListener('keydown',discoveryKeydown);
   discoveryState.motionMedia=window.matchMedia('(prefers-reduced-motion: reduce)');
   discoveryState.motionMedia.addEventListener('change',discoveryCancelMotion);
+  discoveryRenderOtherEvents();
   discoveryRefresh();
   discoverySuggestions();
   ensureSearchIndex().then(()=>{if(discoveryActive() && generation===discoveryState.generation) discoverySuggestions();});

@@ -215,3 +215,66 @@ test('ordinary tournament link focus survives a metadata redraw', () => {
   a.run('discoveryDrawResults()');
   assert.equal(a.context.document.activeElement,a.node('[data-tournament-link="1"]'));
 });
+
+for (const [key,value] of [['circuit_id','67'],['state','CA'],['country','US'],['year','2027']]) {
+  test(`R1 interrupted ${key} selection reloads on return and never exports the old calendar`, async () => {
+    const a = harness();
+    a.run(`location.hash='#discover'; renderDiscoveryWorkspace()`);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const requests=[];
+    a.context.fetch=url=> {
+      if (!url.startsWith('/api/calendar?')) return Promise.resolve({ok:true,json:async()=>({items:[]})});
+      return new Promise(resolve=>requests.push({url,resolve}));
+    };
+    const interrupted=a.run(`filter[${JSON.stringify(key)}]=${JSON.stringify(value)}; discoveryReloadCalendar()`);
+    a.run(`location.hash='#about'; unmountDiscoveryWorkspace(); location.hash='#discover';`);
+    const returning=a.run('renderRoute()');
+    assert.equal(a.run('discoveryResults().length'),0,'the retained old calendar must not be reusable under changed filters');
+    a.run('downloadCSV=rows=>globalThis.exported=rows; discoveryExport()');
+    assert.equal(a.context.exported.length,0);
+    assert.equal(requests.length,2,'return must start a replacement calendar request');
+    assert.ok(requests.every(r=>new URL(r.url,'http://test').searchParams.get(key)===value));
+    requests[1].resolve({ok:true,json:async()=>({tournaments:[{id:'99',name:'Matching calendar',modes:[]}],filters:{}})});
+    await returning;
+    assert.equal(a.run('discoveryResults().map(t=>t.id).join()'),'99');
+    requests[0].resolve({ok:true,json:async()=>({tournaments:[{id:'98',name:'Late old selection',modes:[]}],filters:{}})});
+    await interrupted;
+    a.run('discoveryExport()');
+    assert.equal(a.context.exported.length,1);
+    assert.equal(a.context.exported[0].Tournament,'Matching calendar');
+  });
+}
+
+test('R2 cached regional choices survive remount with selected state and no extra metadata fetch', async () => {
+  const a=harness();
+  a.run(`location.hash='#discover'; renderDiscoveryWorkspace()`);
+  await new Promise(resolve=>setTimeout(resolve,0));
+  a.run(`discoveryState.metadata={'1':{status:'available',events:['Regional Speaking']},'2':{status:'available',events:['PF']}}; discoveryState.eventIds=['other:regional speaking']; location.hash='#about'; unmountDiscoveryWorkspace(); location.hash='#discover';`);
+  const requests=[];
+  a.context.fetch=async url=>{requests.push(url);return {ok:true,json:async()=>({items:[]})};};
+  a.run('renderDiscoveryWorkspace()');
+  const html=a.node('#discovery-other-events').innerHTML;
+  assert.match(html,/data-event="other:regional speaking" checked/);
+  assert.match(html,/Regional Speaking/);
+  assert.equal(a.run('discoveryUnchecked().length'),0);
+  assert.equal(requests.length,0,'cached controls must not require a network-completion side effect');
+});
+
+test('preview Tab and Shift+Tab wrap within modal controls instead of browser chrome', () => {
+  const a=harness();
+  a.run(`location.hash='#discover'; renderDiscoveryWorkspace()`);
+  const dialog=a.node('#discovery-preview');
+  const first=a.node('#discovery-preview-close');
+  const last=a.node('preview-save');
+  dialog.open=true;
+  dialog.querySelectorAll=()=>[first,last];
+  a.context.document.activeElement=last;
+  a.context.keyEvent={key:'Tab',preventDefault(){this.prevented=true;}};
+  a.run('discoveryKeydown(keyEvent)');
+  assert.equal(a.context.document.activeElement,first);
+  assert.equal(a.context.keyEvent.prevented,true);
+  a.context.keyEvent={key:'Tab',shiftKey:true,preventDefault(){this.prevented=true;}};
+  a.run('discoveryKeydown(keyEvent)');
+  assert.equal(a.context.document.activeElement,last);
+  assert.equal(a.context.keyEvent.prevented,true);
+});
