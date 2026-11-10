@@ -64,6 +64,7 @@ async function cached(request, ctx, key, ttl, fn) {
     return json({ error: e.message, unavailable: true }, 502);
   }
 }
+let discoveryApi;
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -72,6 +73,39 @@ export default {
         status: 405,
         headers: { Allow: "GET" },
       });
+    if (url.pathname === "/api/discovery" || url.pathname === "/api/locations") {
+      const isLocations = url.pathname === "/api/locations";
+      const key = isLocations ? "q" : "ids";
+      if (
+        [...url.searchParams.keys()].some(k => k !== key) ||
+        url.searchParams.getAll(key).length !== 1
+      )
+        return json({ error: "Invalid discovery parameters" }, 400);
+      const value = url.searchParams.get(key) || "";
+      if (!isLocations) {
+        const ids = value.split(",");
+        if (ids.length > 12 || ids.some(id => !/^[1-9]\d{0,7}$/.test(id)))
+          return json({ error: "Expected 1–12 tournament IDs" }, 400);
+        discoveryApi ||= createDiscoveryApi();
+        return json(await discoveryApi.discovery([...new Set(ids)]), 200, 60);
+      }
+      if (
+        value.trim().length < 2 || value.length > 100 ||
+        !/^[\p{L}\p{N}][\p{L}\p{N} .,'’()-]*$/u.test(value) ||
+        (!/[\p{L}]/u.test(value) && !/^\d{2,10}$/.test(value)) ||
+        value.split(",").some(p => !p.trim()) || value.split(",").length > 3
+      )
+        return json({ error: "Enter a city or postal code (2–100 characters)" }, 400);
+      discoveryApi ||= createDiscoveryApi();
+      try {
+        return json(await discoveryApi.locations(value.trim()));
+      } catch {
+        return json({
+          error: "Location search unavailable. Try again or enter another place.",
+          unavailable: true,
+        }, 502);
+      }
+    }
     if (url.pathname === "/logo.png")
       return new Response(
         Uint8Array.from(atob(logo), (c) => c.charCodeAt(0)),

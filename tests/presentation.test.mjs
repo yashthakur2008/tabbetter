@@ -67,11 +67,11 @@ test('themes persist and system responds only while selected', () => {
   a.media.matches = true; a.media.change();
   assert.equal(a.document.documentElement.dataset.theme, 'dark');
 });
-test('invalid or unavailable storage falls back safely to system', () => {
+test('invalid or unavailable storage falls back safely to light', () => {
   for (const blocked of [false, true]) {
     const a = app('invalid', true, blocked);
     vm.runInContext('initTheme()', a.context);
-    assert.equal(a.document.documentElement.dataset.theme, 'dark');
+    assert.equal(a.document.documentElement.dataset.theme, 'light');
     a.node('#theme').value = 'light';
     assert.doesNotThrow(() => a.node('#theme').change());
     assert.equal(a.document.documentElement.dataset.theme, 'light');
@@ -214,3 +214,5 @@ test('absent ballots visible on opposing entry keep incomplete entry neutral', (
 test('frontend versions API URLs to avoid browser-cached old export shapes', () => {
   assert.match(source, /schema=4/);
 });
+
+test('fresh visitors default light even with a dark OS', () => { const a = app(null, true); vm.runInContext('initTheme()', a.context); assert.equal(a.document.documentElement.dataset.theme, 'light'); });
