@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+early_access: false
+tone_instructions: >-
+  Review as an independent reviewer. Prioritize concrete correctness, privacy,
+  accessibility and upstream-load findings. Do not equate configuration or a
+  request for review with an approval or a completed audit.
+reviews:
+  profile: assertive
+  high_level_summary: true
+  poem: false
+  review_status: true
+  request_changes_workflow: true
+  path_filters:
+    - '!assets/**'
+    - '!snapshots/**'
+    - '!dist/**'
+    - '!worker/**'
+  auto_review:
+    enabled: true
+    drafts: true
+    base_branches:
+      - '^import/.*$'
+  path_instructions:
+    - path: 'src/**'
+      instructions: >-
+        Check fixed upstream hosts, bounded requests, publication settings,
+        private-field minimization, stale-cache labeling and cache restrictions.
+        Missing public pairings must never imply that a judge has no assignment.
+    - path: 'web/**'
+      instructions: >-
+        Check untrusted text escaping, keyboard access, responsive navigation,
+        asynchronous navigation races, source timestamps, empty states and
+        clarity about account-only official workflows.
+    - path: 'tests/**'
+      instructions: >-
+        Require meaningful failure and publication-boundary coverage. Do not
+        insert real student data, credentials or private ballots into fixtures.
+chat:
+  auto_reply: true

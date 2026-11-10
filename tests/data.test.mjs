@@ -1,0 +1,206 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  clean,
+  parseCalendar,
+  parseCircuits,
+  parseInvitation,
+  normalizeExport,
+  linksIn,
+} from "../src/data.mjs";
+const table =
+  '<table id="tournlist"><tr><td data-text="2026-43-1">10/24</td><td><a href="/index/tourn/main.mhtml?tourn_id=12">Test &amp; Invite</a></td><td>Milpitas</td><td><a href="index.mhtml?state=CA">CA</a></td><td><i title="Tournament has online events"></i><i title="Tournament has in-person events"></i></td><td>Due 10/23 8:00 PM PDT</td><td><a href="/index/tourn/judge_signups.mhtml?tourn_id=12">J</a></td></tr></table>';
+test("calendar keeps IDs, modes, registration, locations and judge signup", () => {
+  const {
+    tournaments: [t],
+  } = parseCalendar(table);
+  assert.equal(t.id, "12");
+  assert.equal(t.name, "Test & Invite");
+  assert.equal(t.state, "CA");
+  assert.equal(t.sortDate, "2026-10-24");
+  assert.deepEqual(t.modes, ["Online", "In person"]);
+  assert.ok(t.registration.startsWith("Due"));
+  assert.ok(t.judgeSignupUrl.endsWith("tourn_id=12"));
+});
+test("calendar rejects login or changed markup rather than returning empty data", () => {
+  assert.throws(() => parseCalendar("<h1>Login</h1>"));
+  assert.throws(() => parseCalendar('<table id="tournlist"></table>'));
+});
+test("invitation preserves text without executable markup", () => {
+  const d = parseInvitation(
+    '<h2>Test</h2><p>Hello <script>alert(1)</script><b>world</b></p><a href="javascript:alert(1)">bad</a>',
+    "12",
+  );
+  assert.deepEqual(d.paragraphs, ["Hello world"]);
+  assert.deepEqual(d.links, []);
+});
+test("links accept only HTTP(S) protocols", () =>
+  assert.deepEqual(
+    linksIn('<a href="javascript:alert(1)">bad</a><a href="/test">ok</a>').map(
+      (x) => x.url,
+    ),
+    ["https://www.tabroom.com/test"],
+  ));
+test("circuits preserve source IDs for calendar navigation", () => {
+  const d = parseCircuits(
+    '<table><tr><td>CFL</td><td><a href="/index/index.mhtml?circuit_id=67">Coast Forensic League</a></td><td>CA</td><td>18</td><td></td></tr></table>',
+  );
+  assert.equal(d[0].id, "67");
+  assert.equal(d[0].count, "18");
+});
+const raw = {
+  id: 12,
+  public: "true",
+  name: "Fixture tournament",
+  timezone: "America/Los_Angeles",
+  creator: "private@example.com",
+  schools: [
+    {
+      id: 1,
+      name: "Example HS",
+      registered_by: 555,
+      students: [{ email: "private@example.com" }],
+      entries: [
+        {
+          id: 2,
+          code: "EX AB",
+          name: "Example entry",
+          school: 1,
+          event: 3,
+          settings: { private: "secret" },
+        },
+        { id: 5, code: "DROP", dropped: 1 },
+      ],
+    },
+  ],
+  categories: [
+    {
+      name: "Debate",
+      judges: [
+        {
+          id: 4,
+          first: "Example",
+          last: "Judge",
+          school: 1,
+          email: "private@example.com",
+        },
+      ],
+      events: [
+        {
+          id: 3,
+          name: "Parli",
+          rounds: [
+            {
+              id: 7,
+              name: "Round 1",
+              sections: [
+                {
+                  id: 8,
+                  room: "B104",
+                  ballots: [
+                    {
+                      entry: 2,
+                      entry_code: "EX AB",
+                      judge_first: "Example",
+                      judge_last: "Judge",
+                      scores: [
+                        { tag: "winloss", value: "1" },
+                        { tag: "rfd", value: "private feedback" },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          result_sets: [
+            { label: "Hidden", published: 0, results: [{ rank: 1, entry: 2 }] },
+            { label: "Public", published: 1, results: [{ rank: 1, entry: 2 }] },
+          ],
+        },
+      ],
+    },
+  ],
+};
+test("export rejects private or wrong-tournament payloads", () => {
+  assert.throws(() => normalizeExport({ ...raw, public: false }, "12"));
+  assert.throws(() => normalizeExport(raw, "99"));
+});
+test("public export excludes private metadata and unpublished standings", () => {
+  const d = normalizeExport(raw, "12"),
+    s = JSON.stringify(d);
+  assert.ok(!s.includes("private@example.com"));
+  assert.ok(!s.includes("registered_by"));
+  assert.ok(!s.includes("secret"));
+  assert.ok(!s.includes("private feedback"));
+  assert.equal(d.resultSets.length, 1);
+  assert.equal(d.resultSets[0].label, "Public");
+});
+test("published pairings retain room, entry, judge and released scores", () => {
+  const d = normalizeExport(raw, "12");
+  assert.equal(d.rounds[0].sections[0].room, "B104");
+  assert.equal(d.rounds[0].sections[0].ballots[0].entry, "EX AB");
+  assert.equal(d.rounds[0].sections[0].ballots[0].judge, "Example Judge");
+  assert.deepEqual(d.rounds[0].sections[0].ballots[0].scores, [
+    { tag: "winloss", value: "1" },
+  ]);
+  assert.equal(d.entries.length, 1);
+  assert.equal(d.entries[0].event, "Parli");
+});
+test("missing publication sections stay empty", () => {
+  const d = normalizeExport({ id: 12, public: "true", name: "Empty" }, "12");
+  assert.deepEqual(d.rounds, []);
+  assert.deepEqual(d.entries, []);
+});
+
+test("text extraction decodes entities only once", () => {
+  assert.equal(clean("&amp;lt;script&amp;gt;"), "&lt;script&gt;");
+  assert.equal(clean("&#38;amp;"), "&amp;");
+});
+test("text extraction skips raw script and style content", () => {
+  assert.equal(
+    clean("<SCRIPT>x</SCRIPT \t bar><style>bad</style >safe"),
+    "safe",
+  );
+  assert.equal(clean("<script><script>nested</script>after"), "after");
+});
+test("text extraction preserves comparisons and quoted tag boundaries", () => {
+  assert.equal(clean('2 < 3 <b title=">">bold</b>'), "2 < 3 bold");
+});
+test("invalid numeric entities do not crash source parsing", () => {
+  assert.equal(clean("&#0; &#xD800; &#x110000;"), "� � �");
+});
+test("normalization retains every judge ballot including numeric zero and missing decisions", () => {
+  const fixture = structuredClone(raw);
+  fixture.categories[0].events[0].rounds[0].sections[0].ballots = [
+    { entry: 2, judge_first: "A", scores: [{ tag: "winloss", value: 0 }] },
+    { entry: 2, judge_first: "B", scores: [{ tag: "winloss", value: "1" }] },
+    { entry: 2, judge_first: "C", scores: [] },
+  ];
+  const ballots = normalizeExport(fixture, "12").rounds[0].sections[0].ballots;
+  assert.equal(ballots.length, 3);
+  assert.deepEqual(ballots.map((b) => b.judge), ["A", "B", "C"]);
+  assert.deepEqual(ballots.map((b) => b.scores), [
+    [{ tag: "winloss", value: "0" }], [{ tag: "winloss", value: "1" }], [],
+  ]);
+});
+
+test('rounds preserve event type, validated person and registration IDs, and separate speaker order', () => {
+  const fixture = structuredClone(raw);
+  const event = fixture.categories[0].events[0];
+  event.type = 'wudc';
+  event.settings = { private: 'secret-event' };
+  event.rounds[0].sections[0].ballots = [
+    { judge: 900, judge_person: 123, side: 2, speakerorder: 3 },
+    ...[undefined, '', 0, -1, '1.5', '1e2', '123&x=1', true].map(judge_person => ({ judge: 901, judge_person })),
+  ];
+  const round = normalizeExport(fixture, '12').rounds[0];
+  assert.equal(round.eventType, 'wudc');
+  const [first, ...invalid] = round.sections[0].ballots;
+  assert.equal(first.judgeId, '900');
+  assert.equal(first.judgePersonId, '123');
+  assert.equal(first.side, '2');
+  assert.equal(first.speakerorder, '3');
+  assert.ok(invalid.every(b => b.judgePersonId === ''));
+  assert.ok(!JSON.stringify(round).includes('secret-event'));
+});

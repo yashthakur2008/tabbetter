@@ -1,0 +1,252 @@
+const pending = new Map(),
+  memory = new Map();
+function json(value, status = 200, ttl = 0, revalidate = false) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      // Build-pinned data must be rechecked, so a redeploy cannot leave a
+      // client showing a corpus the server no longer has.
+      "cache-control": revalidate
+        ? "no-cache"
+        : ttl
+          ? "public, max-age=" + ttl
+          : "no-store",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+async function upstream(path) {
+  const r = await fetch("https://www.tabroom.com" + path, {
+    headers: { "User-Agent": "TabBetter/0.1 public tournament companion" },
+    signal: AbortSignal.timeout(20000),
+    redirect: "manual",
+  });
+  if (r.status >= 300 && r.status < 400)
+    throw Error("Tabroom requires sign-in for this resource");
+  if (!r.ok) throw Error("Tabroom returned " + r.status);
+  const text = await r.text();
+  if (text.length > 12000000) throw Error("Source too large");
+  return text;
+}
+async function cached(request, ctx, key, ttl, fn) {
+  const k = new Request(new URL("/_cache/v4/" + key, request.url));
+  let edge = null,
+    found = null;
+  try {
+    edge = globalThis.caches
+      ? await globalThis.caches.open("tabbetter-public-v4")
+      : null;
+    found = edge && (await edge.match(k));
+  } catch {
+    edge = null;
+  }
+  if (found) return found;
+  const local = memory.get(key);
+  if (local && local.until > Date.now()) return json(local.data, 200, ttl);
+  try {
+    if (!pending.has(key))
+      pending.set(
+        key,
+        fn()
+          .then((data) => ({ ...data, fetchedAt: new Date().toISOString() }))
+          .finally(() => pending.delete(key)),
+      );
+    const data = await pending.get(key);
+    if (memory.size > 100) memory.delete(memory.keys().next().value);
+    memory.set(key, { data, until: Date.now() + ttl * 1000 });
+    const r = json(data, 200, ttl);
+    if (edge) ctx.waitUntil(edge.put(k, r.clone()).catch(() => {}));
+    return r;
+  } catch (e) {
+    if (local)
+      return json({ ...local.data, stale: true, error: e.message }, 200, 30);
+    return json({ error: e.message, unavailable: true }, 502);
+  }
+}
+let discoveryApi;
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (request.method !== "GET")
+      return new Response("Method not allowed", {
+        status: 405,
+        headers: { Allow: "GET" },
+      });
+    if (url.pathname === "/api/discovery" || url.pathname === "/api/locations") {
+      const isLocations = url.pathname === "/api/locations";
+      const key = isLocations ? "q" : "ids";
+      if (
+        [...url.searchParams.keys()].some(k => k !== key) ||
+        url.searchParams.getAll(key).length !== 1
+      )
+        return json({ error: "Invalid discovery parameters" }, 400);
+      const value = url.searchParams.get(key) || "";
+      if (!isLocations) {
+        const ids = value.split(",");
+        if (ids.length > 12 || ids.some(id => !/^[1-9]\d{0,7}$/.test(id)))
+          return json({ error: "Expected 1–12 tournament IDs" }, 400);
+        discoveryApi ||= createDiscoveryApi();
+        return json(await discoveryApi.discovery([...new Set(ids)]), 200, 60);
+      }
+      if (
+        value.trim().length < 2 || value.length > 100 ||
+        !/^[\p{L}\p{N}][\p{L}\p{N} .,'’()-]*$/u.test(value) ||
+        (!/[\p{L}]/u.test(value) && !/^\d{2,10}$/.test(value)) ||
+        value.split(",").some(p => !p.trim()) || value.split(",").length > 3
+      )
+        return json({ error: "Enter a city or postal code (2–100 characters)" }, 400);
+      discoveryApi ||= createDiscoveryApi();
+      try {
+        return json(await discoveryApi.locations(value.trim()));
+      } catch {
+        return json({
+          error: "Location search unavailable. Try again or enter another place.",
+          unavailable: true,
+        }, 502);
+      }
+    }
+    if (url.pathname === "/logo.png")
+      return new Response(
+        Uint8Array.from(atob(logo), (c) => c.charCodeAt(0)),
+        {
+          headers: {
+            "content-type": "image/png",
+            "cache-control": "public,max-age=86400",
+          },
+        },
+      );
+    if (url.pathname === "/api/calendar") {
+      const params = new URLSearchParams();
+      for (const key of ["year", "circuit_id", "state", "country"]) {
+        const v = url.searchParams.get(key);
+        if (v) {
+          if (!/^[A-Za-z0-9-]{1,10}$/.test(v))
+            return json({ error: "Invalid filter" }, 400);
+          if (
+            key === "year" &&
+            (!/^\d{4}$/.test(v) ||
+              Number(v) < 2003 ||
+              Number(v) > new Date().getUTCFullYear() + 2)
+          )
+            return json({ error: "Invalid school year" }, 400);
+          if (key === "circuit_id" && !/^\d{1,8}$/.test(v))
+            return json({ error: "Invalid circuit" }, 400);
+          params.set(key, v);
+        }
+      }
+      return cached(
+        request,
+        ctx,
+        "calendar" + encodeURIComponent(params.toString()),
+        600,
+        async () => ({
+          ...parseCalendar(await upstream("/index/index.mhtml?" + params)),
+          sourceUrl: "https://www.tabroom.com/index/index.mhtml?" + params,
+        }),
+      );
+    }
+    if (url.pathname === "/api/rankings") {
+      const event = url.searchParams.get("event") || "";
+      const season = url.searchParams.get("season") || "";
+      // Events are whatever the imported corpus actually covers.
+      const known =
+        typeof rankingsCorpus !== "undefined" && rankingsCorpus
+          ? rankingsCorpus.events || []
+          : [];
+      if (!/^[\p{L}\p{N}][\p{L}\p{N} .,'’()&/-]{0,99}$/u.test(event))
+        return json({ error: "Invalid event" }, 400);
+      if (known.length && !known.includes(event))
+        return json({ error: "Unsupported event" }, 400);
+      const years = /^(\d{4})-(\d{4})$/.exec(season);
+      if (season && (!years || Number(years[2]) !== Number(years[1]) + 1))
+        return json({ error: "Invalid season" }, 400);
+      // The archive corpus is embedded only when redistribution is cleared.
+      if (typeof rankingsCorpus === "undefined" || !rankingsCorpus)
+        return json(
+          {
+            available: false,
+            reason:
+              "Historical rankings are not included in this build. See docs/rankings-sources.md.",
+          },
+          200,
+          3600,
+          true,
+        );
+      const corpus = hydrateCorpus(rankingsCorpus);
+      // An omitted season resolves to the latest imported one, so clients never
+      // have to hardcode a year that will go stale.
+      // Seasons differ per event, so an omitted season resolves to the latest
+      // season that this event actually publishes.
+      const seasonsForEvent = [
+        ...new Set(
+          corpus.competitors.filter((c) => c.event === event).map((c) => c.season),
+        ),
+      ].sort();
+      const resolved =
+        season ||
+        seasonsForEvent[seasonsForEvent.length - 1] ||
+        corpus.seasons[corpus.seasons.length - 1] ||
+        "";
+      const rows = corpus.competitors.filter(
+        (c) => c.event === event && c.season === resolved,
+      );
+      // Attribution follows the rows: a nationals placement is credited to the
+      // NSDA, not to the rating archive.
+      const lead = rows[0] || {};
+      return json(
+        {
+          available: true,
+          provider: lead.provider || corpus.provider,
+          methodology: lead.methodology || corpus.methodology,
+          sourceUrl: lead.sourceUrl || corpus.sourceUrl,
+          tournament: lead.tournament || null,
+          tournamentUrl: lead.tournamentUrl || null,
+          retrievedAt: corpus.generatedAt,
+          window: corpus.window,
+          seasons: seasonsForEvent.length ? seasonsForEvent : corpus.seasons,
+          events: corpus.events,
+          season: resolved,
+          event,
+          competitors: rows,
+        },
+        200,
+        3600,
+        true,
+      );
+    }
+    if (url.pathname === "/api/circuits")
+      return cached(request, ctx, "circuits", 3600, async () => ({
+        circuits: parseCircuits(await upstream("/index/circuits.mhtml")),
+        sourceUrl: "https://www.tabroom.com/index/circuits.mhtml",
+      }));
+    if (["/api/tournament", "/api/invitation"].includes(url.pathname)) {
+      const id = url.searchParams.get("id");
+      if (!/^\d{1,8}$/.test(id || ""))
+        return json({ error: "Invalid tournament ID" }, 400);
+      if (url.pathname === "/api/invitation")
+        return cached(request, ctx, "invite-" + id, 600, async () =>
+          parseInvitation(
+            await upstream("/index/tourn/main.mhtml?tourn_id=" + id),
+            id,
+          ),
+        );
+      return cached(request, ctx, "tournament-" + id, 300, async () =>
+        normalizeExport(
+          JSON.parse(await upstream("/api/download_data.mhtml?tourn_id=" + id)),
+          id,
+        ),
+      );
+    }
+    if (url.pathname !== "/") return new Response("Not found", { status: 404 });
+    return new Response(page, {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "content-security-policy":
+          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      },
+    });
+  },
+};
