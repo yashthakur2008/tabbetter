@@ -63,6 +63,8 @@ function save(t) {
       id: t.id,
       name: t.name,
       dates: t.dates || formatDate(t.start),
+      sortDate: t.sortDate,
+      start: t.start,
       city: t.city,
       location: t.location || t.state,
       state: t.state || "",

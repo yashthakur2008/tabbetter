@@ -5,17 +5,17 @@ import vm from 'node:vm';
 
 const appSource = fs.readFileSync('web/app.js', 'utf8');
 const uiSource = fs.existsSync('web/discovery.js') ? fs.readFileSync('web/discovery.js', 'utf8') : '';
-function harness() {
+function harness(storage = new Map()) {
   const nodes = new Map();
   const node = key => {
-    if (!nodes.has(key)) nodes.set(key, { innerHTML: '', textContent: '', value: '', dataset: {}, isConnected: true, open: false,
+    if (!nodes.has(key)) nodes.set(key, { innerHTML: '', textContent: '', value: '', style: {}, dataset: {}, isConnected: true, open: false,
       classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, removeAttribute() {},
       querySelector: key => node(key), querySelectorAll: () => [], addEventListener() {}, removeEventListener() {},
       focus() { document.activeElement = this; }, showModal() { this.open = true; }, close() { this.open = false; this.onclose?.(); } });
     return nodes.get(key);
   };
   const document = { activeElement: null, documentElement: { dataset: {} }, querySelector: node, querySelectorAll: () => [], addEventListener() {} };
-  const context = vm.createContext({ document, location: { hash: '#about' }, window: { matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }), addEventListener() {}, removeEventListener() {} }, navigator: {}, localStorage: { getItem: () => null, setItem() {} }, URLSearchParams, AbortController, console, setTimeout, clearTimeout, fetch: async () => ({ ok: true, json: async () => ({ items: [] }) }) });
+  const context = vm.createContext({ document, location: { hash: '#about' }, window: { matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }), addEventListener() {}, removeEventListener() {} }, navigator: {}, localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) }, URLSearchParams, AbortController, console, setTimeout, clearTimeout, fetch: async () => ({ ok: true, json: async () => ({ items: [] }) }) });
   vm.runInContext(fs.readFileSync('src/discovery.mjs', 'utf8').replaceAll('export ', ''), context);
   vm.runInContext(appSource.slice(0, appSource.indexOf('document\n  .querySelectorAll("[data-nav]")')), context);
   vm.runInContext(uiSource, context);
@@ -277,4 +277,99 @@ test('preview Tab and Shift+Tab wrap within modal controls instead of browser ch
   a.run('discoveryKeydown(keyEvent)');
   assert.equal(a.context.document.activeElement,last);
   assert.equal(a.context.keyEvent.prevented,true);
+});
+
+const savedDateRecords = [
+  {id:'1',name:'Zulu November',dates:'11/16',sortDate:'2026-11-16',modes:[]},
+  {id:'2',name:'Alpha December',dates:'12/14',sortDate:'2026-12-14',modes:[]},
+  {id:'3',name:'January next year',start:'2027-01-05',modes:[]},
+];
+test('final R1 actual save serialization and reload retain chronological date and event tie-break order', () => {
+  const storage = new Map();
+  const a = harness(storage);
+  a.context.records = savedDateRecords;
+  a.run('records.forEach(save); clearTimeout(window.tt)');
+  const b = harness(storage);
+  b.run(`location.hash='#saved'; calendar.tournaments=[]; discoveryState.metadata=Object.fromEntries(saved.map(t=>[t.id,{status:'available',events:['OO']}]));`);
+  assert.equal(b.run('discoveryResults().map(t=>t.id).join()'), '1,2,3');
+  b.run(`discoveryState.sort='matches'; discoveryState.eventIds=['oo'];`);
+  assert.equal(b.run('discoveryResults().map(t=>t.id).join()'), '1,2,3');
+  assert.equal(JSON.parse(storage.get('tabbetter-saved'))[0].sortDate, '2026-11-16');
+  assert.equal(JSON.parse(storage.get('tabbetter-saved'))[2].start, '2027-01-05');
+});
+
+test('final R1 legacy saved records join calendar dates by ID without inventing dates or rewriting storage', () => {
+  const legacy = savedDateRecords.slice(0,2).map(({sortDate,...t})=>t);
+  legacy.push({id:'4',name:'Unknown date',dates:'12/14 TBD'});
+  const serialized = JSON.stringify(legacy);
+  const storage = new Map([['tabbetter-saved',serialized]]);
+  const a = harness(storage);
+  a.context.records = savedDateRecords;
+  a.run(`location.hash='#saved'; calendar.tournaments=records;`);
+  assert.equal(a.run('discoveryResults().map(t=>t.id).join()'), '1,2,4');
+  assert.equal(a.run('discoveryResults().find(t=>t.id==="4").sortDate'), undefined);
+  assert.equal(storage.get('tabbetter-saved'),serialized);
+  a.run('calendar.tournaments=[]');
+  assert.equal(a.run('discoveryBase().some(t=>t.sortDate || t.start)'),false,'yearless display dates must not become invented canonical dates');
+});
+
+test('final R2 successful HTTP unavailable metadata has explicit bounded recovery after negative cache expiry', async () => {
+  let now = Date.parse('2026-11-10T00:00:00Z');
+  class Clock extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return now; } }
+  let available = false, upstreamCalls = 0;
+  const workerCode = fs.readFileSync('worker/index.js','utf8').replace('export default {','globalThis.handler = {');
+  const box = vm.createContext({Date:Clock, Response, Request, URL, URLSearchParams, AbortSignal, TextDecoder, setTimeout, clearTimeout, console,
+    fetch: async url => {
+      upstreamCalls++;
+      if (!available) return new Response('Unavailable',{status:503});
+      const id = new URL(url).searchParams.get('tourn_id');
+      return Response.json({id,public:true,name:'Recovered',categories:[{events:[{id:10,name:'Original Oratory'}]}]});
+    }});
+  vm.runInContext(workerCode,box);
+  const a = harness();
+  a.context.Date = Clock;
+  const requests = [];
+  a.context.fetch = async url => {
+    // The optional competitor index is unrelated to metadata recovery.
+    if (!url.startsWith('/api/discovery?')) return {ok:true,json:async()=>({})};
+    requests.push(url);
+    const response = await box.handler.fetch(new Request('https://example.test'+url),{},{waitUntil(){}});
+    assert.equal(response.status,200,'upstream failure is a successful same-origin response');
+    return response;
+  };
+  // Set a mounted root without triggering the initial automatic batch.
+  a.run(`location.hash='#discover'; discoveryState.root=document.querySelector('.discovery-workspace'); calendar.tournaments=Array.from({length:14},(_,i)=>({id:String(i+1),name:'Tournament '+i}));`);
+  await a.run('discoveryCheckNext()');
+  await a.run('discoveryCheckNext()');
+  assert.equal(a.run('discoveryState.metadata[1].status'),'unavailable');
+  assert.equal(upstreamCalls,28);
+  assert.equal(a.node('#discovery-retry-details').hidden,false,'HTTP 200 unavailable must expose recovery');
+  assert.match(a.node('#discovery-coverage').textContent,/1 minute/);
+  await a.run('discoveryCheckNext(true)');
+  assert.equal(requests.length,2,'no requests during negative cache lifetime');
+  a.run(`location.hash='#about'; unmountDiscoveryWorkspace(); location.hash='#discover'; renderDiscoveryWorkspace(); discoveryClearAll();`);
+  assert.equal(requests.length,2,'remount and clear-all retain metadata without crawling or bypassing cooldown');
+  assert.equal(a.node('#discovery-retry-details').hidden,false);
+  now += 59999;
+  await a.run('discoveryCheckNext(true)');
+  assert.equal(requests.length,2);
+  available = true;
+  now += 1;
+  a.run(`discoveryState.eventIds=['oo']; discoveryDrawResults()`);
+  assert.equal(a.run('discoveryResults().length'),0);
+  assert.equal(requests.length,2,'time/filter changes do not auto crawl');
+  await a.run('discoveryCheckNext(true)');
+  assert.equal(requests.length,3);
+  assert.equal(new URL(requests[2],'https://test').searchParams.get('ids').split(',').length,12);
+  assert.equal(a.run('discoveryResults().length'),12,'recovered events reappear under selected event filter');
+  assert.equal(a.run('discoveryState.metadata[13].status'),'unavailable');
+  await a.run('discoveryCheckNext(true)');
+  assert.equal(a.run('discoveryResults().length'),14);
+  assert.equal(a.node('#discovery-retry-details').hidden,true);
+  await a.run('discoveryCheckNext(true)');
+  assert.equal(requests.length,4,'available items are not endlessly retried');
+  a.run(`discoveryState.metadata[1].events=[]; discoveryDrawResults()`);
+  await a.run('discoveryCheckNext(true)');
+  assert.equal(requests.length,4,'an available empty offering is not treated as an unavailable fetch');
+  assert.equal(a.node('#discovery-retry-details').hidden,true);
 });

@@ -1,6 +1,7 @@
-// Browser acceptance checks against the compiled worker. Only the external
-// Tabroom/GeoNames responses are fixtures; routing, parsers, API adapters,
-// embedded JS/CSS, DOM events and browser permissions execute for real.
+// Browser acceptance checks against the compiled worker. External source
+// responses are fixtures. Two same-origin timing tests below deliberately gate
+// calendar requests or fulfill a late location response. Other routes, parsers,
+// assets, DOM events and browser permissions execute for real.
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const path = require('node:path');
@@ -24,6 +25,37 @@ function calendarFixture(url) {
 }
 function exportFixture(record) {
   return { ...record, public: 'true', start: '2026-11-16', end: '2026-11-18', timezone: 'America/Los_Angeles', schools: [], categories: [{ name: 'Published events', judges: [], events: record.events.map((name, i) => ({ id: String(i + 1), name, type: /Oratory|Interpretation/.test(name) ? 'speech' : 'debate', rounds: [] })) }] };
+}
+
+async function checkDeniedLocation(browser, baseURL) {
+  const context = await browser.newContext();
+  try {
+    // An empty grant explicitly denies permissions not listed, rather than
+    // leaving a browser prompt pending. Verify the actual Permissions API state.
+    await context.grantPermissions([], {origin:baseURL});
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    if (process.argv.includes('--pending-location-probe')) {
+      // Negative control: the scenario MUST fail if the callback never resolves.
+      await page.addInitScript(() => { navigator.geolocation.getCurrentPosition = () => {}; });
+    }
+    await page.goto(baseURL);
+    assert.equal(await page.evaluate(async () => (await navigator.permissions.query({name:'geolocation'})).state), 'denied');
+    await page.locator('#discovery-location > summary').click();
+    await page.locator('#discovery-near-me').click();
+    await page.waitForFunction(() => document.querySelector('#discovery-location-status')?.textContent ===
+      'Location permission was denied or timed out. Search for a city or postal code instead.', null, {timeout:3000});
+    assert.equal(await page.locator('#discovery-radius').isDisabled(),true);
+    assert.equal(await page.locator('#discovery-place').isEditable(),true);
+    await page.locator('#discovery-place').fill('San Jose, CA');
+    await page.locator('#discovery-location-form button').click();
+    await page.locator('[data-place-index="0"]').click();
+    assert.match(await page.locator('#discovery-location-status').innerText(), /San Jose/);
+    assert.equal(await page.locator('#discovery-radius').isDisabled(),false,'manual entry remains usable after actual denial');
+    assert.deepEqual(errors,[]);
+    console.log('PASS explicit browser permission denied, terminal fallback, and usable manual place selection');
+  } finally { await context.close(); }
 }
 
 (async () => {
@@ -56,6 +88,10 @@ function exportFixture(record) {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const baseURL = 'http://127.0.0.1:' + server.address().port;
     browser = await chromium.launch();
+    if (process.argv.includes('--denial-only')) {
+      await checkDeniedLocation(browser, baseURL);
+      return;
+    }
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, colorScheme: 'light' });
     const page = await context.newPage();
     const errors = [];
@@ -216,14 +252,7 @@ function exportFixture(record) {
     await geoPage.waitForFunction(()=>document.querySelectorAll('[data-discovery-row]').length===2);
     assert.deepEqual(await geoPage.locator('[data-discovery-row]').evaluateAll(nodes=>nodes.map(n=>n.dataset.discoveryRow)),['91001','91002']);
     await geoContext.close();
-    const deniedContext = await browser.newContext();
-    const deniedPage = await deniedContext.newPage();
-    await deniedPage.goto(baseURL);
-    await deniedPage.locator('#discovery-location > summary').click();
-    await deniedPage.locator('#discovery-near-me').click();
-    await deniedPage.waitForFunction(()=>/denied|permission|allow|unavailable/i.test(document.querySelector('#discovery-location-status').textContent));
-    assert.equal(await deniedPage.locator('#discovery-radius').isDisabled(),true);
-    await deniedContext.close();
+    await checkDeniedLocation(browser, baseURL);
     assert.deepEqual(errors,[]);
     console.log('PASS light default on dark OS, real geolocation allow/deny, stale manual location and back-navigation privacy');
   } finally {

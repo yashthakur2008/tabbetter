@@ -13,7 +13,14 @@ function discoveryActive() {
   return discoveryState.root?.isConnected && ["discover", "saved"].includes(route().name);
 }
 function discoveryBase() {
-  const items = route().name === "saved" ? saved : calendar?.tournaments || [];
+  const summaries = new Map((calendar?.tournaments || []).map(t => [String(t.id), t]));
+  // Old bookmarks kept only display dates. Recover source-backed sort keys by
+  // identity, never infer a year from an arbitrary display string.
+  const items = route().name === "saved" ? saved.map(t => {
+    if (t.sortDate || t.start) return t;
+    const current = summaries.get(String(t.id));
+    return current ? {...t, sortDate: current.sortDate, start: current.start} : t;
+  }) : calendar?.tournaments || [];
   const calendarIds = new Set((calendar?.tournaments || []).map(t => t.id));
   return items.filter(t =>
     (!filter.state || route().name !== "saved" || t.state === filter.state || t.location === filter.state) &&
@@ -59,7 +66,7 @@ function discoveryShellHTML() {
     '<label><input id="discovery-judges" type="checkbox" ' + (filter.judges ? 'checked' : '') + '> Seeking judges</label><label><input id="discovery-online" type="checkbox" ' + (discoveryState.includeOnline ? 'checked' : '') + '> Include online tournaments (separate group with location)</label></div></details>' +
     '<details id="discovery-actions"><summary>Actions <span aria-hidden="true">⌄</span></summary><div class="discovery-popover"><button id="discovery-export">Export filtered CSV</button><button id="discovery-print">Print results</button><button id="discovery-open">Open by link</button></div></details><button id="discovery-clear-all">Clear all</button></div>' +
     '<p class="visually-hidden" id="discovery-radius-note">Set a location to enable distance filters.</p><div class="discovery-active"><div id="discovery-chips"></div></div>' +
-    '<div id="discovery-calendar-status" role="status"></div><div class="discovery-results-head"><div><h2 id="discovery-count" tabindex="-1" aria-live="polite"></h2><p id="discovery-coverage"></p><button id="discovery-check-next">Check next 12</button><button id="discovery-retry-details" hidden>Retry failed checks</button></div><label class="discovery-control">Sort<select id="discovery-sort">' +
+    '<div id="discovery-calendar-status" role="status"></div><div class="discovery-results-head"><div><h2 id="discovery-count" tabindex="-1" aria-live="polite"></h2><p id="discovery-coverage"></p><button id="discovery-check-next">Check next 12</button><button id="discovery-retry-details" hidden>Retry failed checks / unavailable details</button></div><label class="discovery-control">Sort<select id="discovery-sort">' +
     [{id:'date',label:'Date'},{id:'distance',label:'Nearest first'},{id:'matches',label:'Preferred-event matches'},{id:'name',label:'Name A–Z'}].map(s=>'<option value="'+s.id+'" '+(discoveryState.sort===s.id?'selected':'')+'>'+s.label+'</option>').join('') +
     '</select></label></div><p id="discovery-sort-note" role="status"></p><div id="discovery-results"></div><button id="discovery-show-more">Show more tournaments</button><div id="discovery-source">' + (calendar?.fetchedAt ? sourceLine(calendar, '10 min') : '') + '</div>' +
     '<dialog id="discovery-preview" class="discovery-preview" aria-labelledby="discovery-preview-title"><button id="discovery-preview-close" autofocus>Close preview</button><div id="discovery-preview-content"></div></dialog></section>' + footer;
@@ -95,7 +102,8 @@ function discoveryCoverage() {
   const checked = items.filter(t => discoveryState.metadata[t.id]);
   const available = checked.filter(t => discoveryState.metadata[t.id].status === 'available').length;
   const failed = checked.filter(t => discoveryState.metadata[t.id].status === 'failed').length;
-  return checked.length + ' of ' + items.length + ' listed tournaments checked · ' + available + ' with published details' + (failed ? ' · ' + failed + ' failed checks' : '') + '. Matches may be incomplete.';
+  const unavailable = checked.some(t => discoveryState.metadata[t.id].status === 'unavailable');
+  return checked.length + ' of ' + items.length + ' listed tournaments checked · ' + available + ' with published details' + (failed ? ' · ' + failed + ' failed checks' : '') + '. Matches may be incomplete.' + (unavailable ? ' Retry unavailable details after 1 minute from the last check (up to 12 per click).' : '');
 }
 function discoveryDrawResults() {
   if (!discoveryActive()) return;
@@ -122,7 +130,7 @@ function discoveryDrawResults() {
   $('#discovery-check-next').disabled = discoveryState.metadataBusy || discoveryState.calendarBusy || !next.length;
   $('#discovery-check-next').textContent = discoveryState.metadataBusy ? 'Checking published details…' : next.length ? 'Check next ' + Math.min(12, next.length) : 'Listed details checked';
   $('#discovery-show-more').hidden = results.length <= discoveryState.visible;
-  $('#discovery-retry-details').hidden = !discoveryBase().some(t => discoveryState.metadata[t.id]?.status === 'failed');
+  $('#discovery-retry-details').hidden = !discoveryBase().some(t => ['failed','unavailable'].includes(discoveryState.metadata[t.id]?.status));
   $('#discovery-retry-details').disabled = discoveryState.metadataBusy || discoveryState.calendarBusy;
   discoveryState.animation?.cancel();
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && region.animate) discoveryState.animation = region.animate([{opacity:0.65},{opacity:1}], {duration:180});
@@ -181,7 +189,10 @@ async function discoveryJSON(url, controller, options = {}) {
 }
 async function discoveryCheckNext(retry = false) {
   if (!discoveryActive() || discoveryState.metadataBusy || discoveryState.calendarBusy) return;
-  const candidates = retry ? discoveryBase().filter(t => discoveryState.metadata[t.id]?.status === 'failed') : discoveryUnchecked();
+  const candidates = retry ? discoveryBase().filter(t => {
+    const item = discoveryState.metadata[t.id];
+    return item?.status === 'failed' || (item?.status === 'unavailable' && Date.now() >= item.retryAfter);
+  }) : discoveryUnchecked();
   const ids = candidates.slice(0,12).map(t=>t.id);
   if (!ids.length) return;
   const generation = ++discoveryState.metadataGeneration;
@@ -193,7 +204,12 @@ async function discoveryCheckNext(retry = false) {
     const data = await discoveryJSON('/api/discovery?ids=' + ids.map(encodeURIComponent).join(','), controller);
     if (!discoveryActive() || generation !== discoveryState.metadataGeneration) return;
     const items = new Map((data.items || []).map(item => [String(item.id),item]));
-    for (const id of ids) discoveryState.metadata[id] = items.get(String(id)) || {id,status:'unavailable',events:[]};
+    for (const id of ids) {
+      const item = items.get(String(id)) || {id,status:'unavailable',events:[]};
+      // Wait a full negative-cache TTL from receipt, so cached responses and
+      // server/client clock skew cannot cause an early upstream recheck.
+      discoveryState.metadata[id] = {...item, retryAfter: item.status === 'unavailable' ? Date.now() + 60000 : undefined};
+    }
   } catch (error) {
     if (!discoveryActive() || generation !== discoveryState.metadataGeneration) return;
     if (error.name !== 'AbortError') for (const id of ids) discoveryState.metadata[id] = {id,status:'failed',events:[]};
