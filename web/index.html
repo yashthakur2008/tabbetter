@@ -6,7 +6,7 @@
     <title>TabBetter — Your tournament, clearly.</title>
     <meta
       name="description"
-      content="Explore debate tournaments, pairings, entries and judges in one clear workspace."
+      content="Explore speech and debate tournaments, pairings, entries and judges in one clear workspace."
     />
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -18,16 +18,17 @@
         <nav class="primary-nav" aria-label="Main navigation">
           <button data-nav="discover">Tournaments</button>
           <button data-nav="saved">Saved</button>
-          <button data-nav="circuits">Circuits</button>
-          <button data-nav="results">Results</button>
-          <button data-nav="rankings">Rankings</button>
           <details class="more-nav"><summary>More <span aria-hidden="true">⌄</span></summary>
             <div class="more-menu">
+              <button data-nav="circuits">Circuits</button>
+              <button data-nav="results">Results</button>
+              <button data-nav="rankings">Rankings</button>
               <button data-nav="judging">Judging</button>
               <button data-nav="paradigms">Paradigms</button>
               <button data-nav="account">School &amp; registration</button>
               <button data-nav="help">Help &amp; resources</button>
               <a href="#about">About TabBetter</a>
+              <a href="https://www.tabroom.com/user/home.mhtml" target="_blank" rel="noopener">My Tabroom ↗</a>
             </div>
           </details>
         </nav>
@@ -38,7 +39,7 @@
       </div>
     </header>
     <main>
-      <div class="workspace-context"><span>TabBetter</span><span aria-hidden="true">/</span><strong id="crumb">Tournaments</strong><span class="workspace-status">Independent · Public Tabroom data</span></div>
+      <span id="crumb" class="visually-hidden">Tournaments</span>
       <div class="content" id="app" tabindex="-1">
         <div class="loading">Connecting to Tabroom…</div>
       </div>

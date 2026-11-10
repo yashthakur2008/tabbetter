@@ -20,7 +20,7 @@ const official = "https://www.tabroom.com";
 const href = (id, p = "main") =>
   official + "/index/tourn/" + p + ".mhtml?tourn_id=" + encodeURIComponent(id);
 const footer =
-  '<footer class="footer"><span>TabBetter · Less searching. More debating. · <a href="#about">Our mission & team</a></span><span>Independent companion · Not affiliated with Tabroom or NSDA.</span></footer>';
+  '<footer class="footer"><span>TabBetter · Less searching. More speech and debate. · <a href="#about">Our mission & team</a></span><span>Independent companion · Not affiliated with Tabroom or NSDA.</span></footer>';
 function readSaved() {
   try {
     const v = JSON.parse(localStorage.getItem("tabbetter-saved") || "[]");
@@ -847,7 +847,7 @@ function renderSearchResults(results) {
   );
 }
 function sidebarHTML() {
-  return '<aside class="directory-shortcuts" aria-label="Tournament shortcuts"><div><span class="eyebrow">YOUR NEXT STEP</span><h3>Less searching. More debating.</h3></div><a href="#judging">Find judging assignments ↗</a><a href="#paradigms">Browse paradigms ↗</a><button class="reset" data-cfl>Coast Forensic League →</button><button class="reset" data-ca>California tournaments →</button></aside>';
+  return '<aside class="directory-shortcuts" aria-label="Tournament shortcuts"><div><span class="eyebrow">YOUR NEXT STEP</span><h3>Less searching. More speech and debate.</h3></div><a href="#judging">Find judging assignments ↗</a><a href="#paradigms">Browse paradigms ↗</a><button class="reset" data-cfl>Coast Forensic League →</button><button class="reset" data-ca>California tournaments →</button></aside>';
 }
 function opts(options, value, all) {
   return (
@@ -869,118 +869,10 @@ function opts(options, value, all) {
   );
 }
 function calendarShell() {
-  const r = route();
-  const isBookmarks = r.name === "saved";
-  const data = calendar?.tournaments || [];
-  $("#app").innerHTML =
-    hero(
-      isBookmarks
-        ? "Your tournaments. One place."
-        : "Find your next tournament.",
-      isBookmarks
-        ? "The tournaments you saved, ready when you are."
-        : "The Tabroom calendar you know, organized for your next round. Find an event, check the details, and keep your season in view.",
-    ) +
-    '<div class="omni tb-reveal" style="--tb-delay:40ms"><input id="omni" type="search" autocomplete="off" aria-label="Search tournaments and past competitors" placeholder="Search tournaments, past competitors, schools…" value="' +
-    attr(omniQuery) +
-    '"></div><div id="omni-out"></div>' +
-    homeTiles([
-      {
-        tone: "teal",
-        eyebrow: "BROWSE",
-        title: "Tournaments",
-        body: "Every tournament in the current public listing.",
-        value: data.length,
-        route: "discover",
-      },
-      {
-        tone: "violet",
-        eyebrow: "SEASON",
-        title: "National rankings",
-        body: "Published standings by event for the 2025-2026 season.",
-        route: "rankings/" + encodeURIComponent("Lincoln-Douglas"),
-      },
-      {
-        tone: "amber",
-        eyebrow: "REACH",
-        title: "Locations",
-        body: "States and provinces across the current listing.",
-        value: new Set(data.filter((t) => t.state).map((t) => t.state)).size,
-        route: "circuits",
-      },
-      {
-        tone: "rose",
-        eyebrow: "YOURS",
-        title: "Saved",
-        body: "Tournaments you kept on this device.",
-        value: saved.length,
-        route: "saved",
-      },
-    ]) +
-    '<div class="directory-grid"><section><div class="switch-row"><div><h2>' +
-    (isBookmarks ? "Saved tournaments" : "Upcoming tournaments") +
-    '</h2><div class="smalltext" style="margin-top:7px">' +
-    (filter.year
-      ? "School year ending " + esc(filter.year)
-      : "Find your circuit. Find your people.") +
-    '</div></div><button class="btn" id="jump-open">＋ Open by link</button></div><div class="search-wrap"><span>⌕</span><input id="search" class="search" aria-label="Search tournaments" placeholder="Search tournaments, cities or states…" value="' +
-    attr(filter.q) +
-    '"></div><div class="filters"><select id="state" aria-label="State or province">' +
-    opts(
-      calendar?.filters.state || [],
-      filter.state,
-      "All states / provinces",
-    ) +
-    '</select><select id="country" aria-label="Country">' +
-    opts(calendar?.filters.country || [], filter.country, "All countries") +
-    '</select><select id="circuit_id" aria-label="Circuit">' +
-    opts(
-      calendar?.filters.circuit_id || calendar?.filters.circuit || [],
-      filter.circuit_id,
-      "All circuits",
-    ) +
-    '</select><select id="year" aria-label="School year ending">' +
-    opts(calendar?.filters.year || [], filter.year, "Upcoming dates") +
-    '</select><select id="mode" aria-label="Mode">' +
-    opts(
-      ["In person", "Online", "Hybrid"].map((x) => ({ value: x, label: x })),
-      filter.mode,
-      "All formats",
-    ) +
-    '</select><select id="registration" aria-label="Registration status">' +
-    opts(
-      [
-        { value: "Due", label: "Accepting registration" },
-        { value: "Open", label: "Opens later" },
-        { value: "Closed", label: "Closed" },
-      ],
-      filter.registration,
-      "All registration",
-    ) +
-    '</select></div><div style="display:flex;justify-content:space-between;align-items:center"><label class="smalltext"><input type="checkbox" id="judge-only" ' +
-    (filter.judges ? "checked" : "") +
-    '> Seeking judges</label><button class="reset" id="reset">Reset filters</button></div><div class="list-header"><span class="smalltext" id="count"></span><div style="display:flex;gap:9px"><select id="sort" aria-label="Sort tournaments" style="font-size:11px;padding:7px;max-width:125px">' +
-    opts(
-      [
-        { value: "name", label: "Name A–Z" },
-        { value: "date", label: "Date" },
-        { value: "city", label: "City A–Z" },
-      ],
-      filter.sort,
-      "Source order",
-    ) +
-    '</select><button class="btn hide-small" id="print">Print</button><button class="btn" id="export">↓ CSV</button><div class="view-toggle"><button id="table-view" aria-label="Table view" class="' +
-    (layout === "table" ? "active" : "") +
-    '">☷</button><button id="cards-view" aria-label="Card view" class="' +
-    (layout === "cards" ? "active" : "") +
-    '">▦</button></div></div></div><div id="listing"></div><div class="pager" id="pager"></div>' +
-    (calendar ? sourceLine(calendar, "10 min") : "") +
-    "</section>" +
-    sidebarHTML() +
-    "</div>" +
-    footer;
-  bindDirectory();
-  drawCalendar();
+  if (typeof renderDiscoveryWorkspace === "function") return renderDiscoveryWorkspace();
+  // The compiler loads the discovery UI after app.js. Its ready handoff owns
+  // this initial render, without binding the obsolete duplicate-search shell.
+  loading("Preparing tournament discovery…");
 }
 function filteredTournaments() {
   let a = route().name === "saved" ? saved : calendar?.tournaments || [];
@@ -2099,7 +1991,7 @@ function renderEntryBallots(entry) {
 }
 function initTheme() {
   const choices = ["system", "light", "dark", "midnight"];
-  let preference = "system";
+  let preference = "light";
   try {
     const stored = localStorage.getItem("tabbetter-theme");
     if (choices.includes(stored)) preference = stored;
@@ -2457,6 +2349,7 @@ function toolPage(name) {
   });
 }
 async function renderRoute() {
+  if (typeof unmountDiscoveryWorkspace === "function") unmountDiscoveryWorkspace();
   routeToken++;
   const r = route();
   document.querySelectorAll(".more-nav[open]").forEach(menu => menu.removeAttribute("open"));
@@ -2477,7 +2370,11 @@ async function renderRoute() {
     }[r.name] || "Tournaments";
   document
     .querySelectorAll("[data-nav]")
-    .forEach((b) => b.classList.toggle("active", b.dataset.nav === r.name));
+    .forEach((b) => {
+      b.classList.toggle("active", b.dataset.nav === r.name);
+      if (b.dataset.nav === r.name) b.setAttribute("aria-current", "page");
+      else b.removeAttribute("aria-current");
+    });
   document.title =
     (r.name === "tournament" && tournament ? tournament.name + " · " : "") +
     "TabBetter";
@@ -2544,6 +2441,8 @@ window.addEventListener("hashchange", () => {
 });
 window.addEventListener("keydown", (e) => {
   if (
+    !["discover", "saved"].includes(route().name) &&
+    !e.isComposing && !document.activeElement.isContentEditable &&
     e.key === "/" &&
     !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)
   ) {
@@ -2567,38 +2466,3 @@ document.addEventListener("visibilitychange", () => {
 });
 initTheme();
 renderRoute();
-
-// Pointer-tracked spotlight on tiles.
-//
-// Delegated from the document so it keeps working after every re-render, and
-// written as CSS custom properties so the gradient itself stays in the
-// stylesheet. Honouring reduced motion here means the CSS never has to guess.
-(function tileSpotlight() {
-  const reduced =
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduced || typeof document.addEventListener !== "function") return;
-  let frame = 0;
-  let pending = null;
-  document.addEventListener(
-    "pointermove",
-    (event) => {
-      const tile =
-        event.target && event.target.closest && event.target.closest(".tile");
-      if (!tile) return;
-      pending = { tile, x: event.clientX, y: event.clientY };
-      // Coalesce to one write per frame; pointermove fires far faster than paint.
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        if (!pending) return;
-        const { tile: node, x, y } = pending;
-        const box = node.getBoundingClientRect();
-        if (!box.width || !box.height) return;
-        node.style.setProperty("--mx", ((x - box.left) / box.width) * 100 + "%");
-        node.style.setProperty("--my", ((y - box.top) / box.height) * 100 + "%");
-      });
-    },
-    { passive: true },
-  );
-})();
