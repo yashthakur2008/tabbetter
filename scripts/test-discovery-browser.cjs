@@ -27,6 +27,21 @@ function exportFixture(record) {
   return { ...record, public: 'true', start: '2026-11-16', end: '2026-11-18', timezone: 'America/Los_Angeles', schools: [], categories: [{ name: 'Published events', judges: [], events: record.events.map((name, i) => ({ id: String(i + 1), name, type: /Oratory|Interpretation/.test(name) ? 'speech' : 'debate', rounds: [] })) }] };
 }
 
+async function navigateWorkspace(page, destination) {
+  const menu = page.locator('#workspace-menu');
+  if (await menu.isVisible()) await menu.click();
+  await page.locator('[data-nav="' + destination + '"]').click();
+  await page.waitForURL('**/#' + destination);
+}
+async function chooseTheme(page, theme) {
+  const previous = new URL(page.url()).hash || '#discover';
+  await navigateWorkspace(page, 'settings');
+  await page.locator('#theme').selectOption(theme);
+  await page.evaluate(hash => { location.hash = hash; }, previous);
+  await page.waitForURL('**/' + previous);
+  await page.locator('.discovery-workspace').waitFor();
+}
+
 async function checkDeniedLocation(browser, baseURL) {
   const context = await browser.newContext();
   try {
@@ -105,6 +120,21 @@ async function checkDeniedLocation(browser, baseURL) {
     assert.equal(await page.locator('#app input[type="search"]:visible').count(), 1, 'one unified visible search');
     assert.deepEqual(errors, [], 'browser should not emit runtime errors');
     console.log('PASS compiled worker renders the discovery workspace with one search');
+    await page.locator('#discovery-search').fill('Bay');
+    await page.locator('#discovery-events > summary').click();
+    await page.locator('#tutorial-start').click();
+    await page.locator('#tutorial-next').click();
+    await page.locator('#tutorial-next').click();
+    assert.match(await page.locator('#tutorial-context').innerText(), /location filters/);
+    await page.keyboard.press('/');
+    assert.equal(await page.evaluate(()=>document.activeElement.closest('dialog')?.id),'tutorial-dialog');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#discovery-events').evaluate(el=>el.open),true,'tour Escape must not close underlying filters');
+    assert.equal(await page.locator('#discovery-search').inputValue(),'Bay','tour preserves search');
+    await page.locator('#discovery-events > summary').click();
+    await page.locator('#discovery-search').fill('');
+    console.log('PASS tutorial fallback and modal shortcuts preserve discovery search and disclosures');
+
     assert.ok(upstreamCalls.some(url => url.includes('/index/index.mhtml')), 'calendar parsed through real adapter');
     const rows = page.locator('[data-discovery-row]');
     const ids = () => rows.evaluateAll(nodes => nodes.map(n => n.dataset.discoveryRow));
@@ -200,7 +230,7 @@ async function checkDeniedLocation(browser, baseURL) {
       await page.setViewportSize({width:390,height:900});
       await page.screenshot({path:path.join(screenshotDir,'discovery-mobile.png'),fullPage:true});
     }
-    await page.locator('#theme').selectOption('dark');
+    await chooseTheme(page, 'dark');
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
     await page.reload();
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark','explicit dark persists');
@@ -249,8 +279,8 @@ async function checkDeniedLocation(browser, baseURL) {
     await geoPage.route('**/api/calendar?*',async request=>{calendarStarted();await calendarGate;await request.continue().catch(()=>{});});
     await geoPage.locator('#discovery-circuit_id').selectOption('67');
     await calendarStart;
-    await geoPage.locator('[data-nav="saved"]').click();
-    await geoPage.locator('[data-nav="discover"]').click();
+    await navigateWorkspace(geoPage, 'saved');
+    await navigateWorkspace(geoPage, 'discover');
     assert.equal(await geoPage.locator('[data-discovery-row="91003"]').count(),0,'pending circuit remount must not expose unfiltered rows');
     releaseCalendar();
     await geoPage.waitForFunction(()=>document.querySelectorAll('[data-discovery-row]').length===2);

@@ -15,6 +15,7 @@ function app() {
   const node = key => { if (!nodes.has(key)) nodes.set(key, {innerHTML: '', value: '', addEventListener(){}, insertAdjacentHTML(_, html){this.innerHTML += html;}}); return nodes.get(key); };
   const context = vm.createContext({document: {querySelector: node, querySelectorAll: () => []}, window: {}, localStorage: {getItem: () => null}, location: {hash: '#tournament/1/results'}, URLSearchParams, console});
   const source = fs.readFileSync('web/app.js', 'utf8');
+  vm.runInContext(fs.readFileSync("web/schedule.js", "utf8"), context);
   vm.runInContext(source.slice(0, source.indexOf('document\n  .querySelectorAll("[data-nav]")')), context);
   const fixture = normalizeExport(raw(), '1');
   fixture.rounds = [{id: '4', eventId: '2', event: 'PF', name: 'Round 1', sections: []}, {id: '5', eventId: '3', event: 'LD', name: 'Round 1', sections: []}];

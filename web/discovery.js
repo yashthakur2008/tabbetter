@@ -49,7 +49,7 @@ function discoveryEventChoices(events) {
 function discoveryShellHTML() {
   const f = calendar?.filters || {};
   return '<section class="discovery-workspace" aria-label="Tournament discovery">' +
-    '<header class="discovery-intro"><h1>' + (route().name === 'saved' ? 'Your next stages, saved.' : 'Find your next stage.') + '</h1><p>Discover speech and debate tournaments by event, circuit, and location.</p></header>' +
+    '<header class="discovery-intro"><h1>' + (route().name === 'saved' ? 'Saved tournaments' : 'Tournaments') + '</h1></header>' +
     '<div class="discovery-search"><label for="discovery-search">Search tournaments and available competitors</label><div><input id="discovery-search" type="search" autocomplete="off" placeholder="Tournament, city, or competitor school…" value="' + attr(filter.q) + '"><kbd aria-hidden="true">⌘ / Ctrl K</kbd></div></div><div id="discovery-suggestions"></div>' +
     '<div class="discovery-filters"><details id="discovery-events"><summary>Events <span aria-hidden="true">⌄</span></summary><div class="discovery-popover discovery-event-panel"><h2>Published events</h2><label class="discovery-control">Match selected events<select id="discovery-event-match"><option value="any">ANY selected event</option><option value="all" ' + (discoveryState.eventMatch === 'all' ? 'selected' : '') + '>ALL selected events</option></select></label><div class="discovery-event-groups">' +
     ['speech', 'debate'].map(group => '<fieldset><legend>' + (group === 'speech' ? 'Speech' : 'Debate') + '</legend>' + discoveryEventChoices(DISCOVERY_EVENTS.filter(e => e.group === group)) + '</fieldset>').join('') +
@@ -66,9 +66,9 @@ function discoveryShellHTML() {
     '<label><input id="discovery-judges" type="checkbox" ' + (filter.judges ? 'checked' : '') + '> Seeking judges</label><label><input id="discovery-online" type="checkbox" ' + (discoveryState.includeOnline ? 'checked' : '') + '> Include online tournaments (separate group with location)</label></div></details>' +
     '<details id="discovery-actions"><summary>Actions <span aria-hidden="true">⌄</span></summary><div class="discovery-popover"><button id="discovery-export">Export filtered CSV</button><button id="discovery-print">Print results</button><button id="discovery-open">Open by link</button></div></details><button id="discovery-clear-all">Clear all</button></div>' +
     '<p class="visually-hidden" id="discovery-radius-note">Set a location to enable distance filters.</p><div class="discovery-active"><div id="discovery-chips"></div></div>' +
-    '<div id="discovery-calendar-status" role="status"></div><div class="discovery-results-head"><div><h2 id="discovery-count" tabindex="-1" aria-live="polite"></h2><p id="discovery-coverage"></p><button id="discovery-check-next">Check next 12</button><button id="discovery-retry-details" hidden>Retry failed checks / unavailable details</button></div><label class="discovery-control">Sort<select id="discovery-sort">' +
+    '<div id="discovery-calendar-status" role="status"></div><div class="discovery-results-head"><h2 id="discovery-count" tabindex="-1" aria-live="polite"></h2><label class="discovery-control"><span>Sort</span><select id="discovery-sort">' +
     [{id:'date',label:'Date'},{id:'distance',label:'Nearest first'},{id:'matches',label:'Preferred-event matches'},{id:'name',label:'Name A–Z'}].map(s=>'<option value="'+s.id+'" '+(discoveryState.sort===s.id?'selected':'')+'>'+s.label+'</option>').join('') +
-    '</select></label></div><p id="discovery-sort-note" role="status"></p><div id="discovery-results"></div><button id="discovery-show-more">Show more tournaments</button><div id="discovery-source">' + (calendar?.fetchedAt ? sourceLine(calendar, '10 min') : '') + '</div>' +
+    '</select></label></div><p id="discovery-coverage"></p><div class="discovery-coverage-tools"><details id="discovery-coverage-help"><summary>About event coverage</summary><p>Only checked, published events can match event filters. Unchecked or unavailable details may hide matches. Retry unavailable details after 1 minute from the last check, up to 12 per click.</p></details><div class="discovery-check-actions"><span id="discovery-check-status" class="visually-hidden" role="status" aria-live="polite"></span><button id="discovery-check-next">Check next 12</button><button id="discovery-retry-details" hidden>Retry details</button></div></div><p id="discovery-sort-note" role="status"></p><div id="discovery-results"></div><button id="discovery-show-more">Show more tournaments</button><div id="discovery-source">' + (calendar?.fetchedAt ? sourceLine(calendar, '10 min') : '') + '</div>' +
     '<dialog id="discovery-preview" class="discovery-preview" aria-labelledby="discovery-preview-title"><button id="discovery-preview-close" autofocus>Close preview</button><div id="discovery-preview-content"></div></dialog></section>' + footer;
 }
 function discoveryStatus(t) {
@@ -95,15 +95,20 @@ function discoverySaveHTML(t) {
   return '<button data-discovery-save="' + attr(t.id) + '" aria-pressed="' + isSaved(t.id) + '" aria-label="' + (isSaved(t.id) ? 'Unsave ' : 'Save ') + attr(t.name) + '">' + (isSaved(t.id) ? 'Saved' : 'Save') + '</button>';
 }
 function discoveryRowHTML(t) {
-  return '<article class="discovery-row' + (discoveryState.preview?.id === t.id ? ' is-previewed' : '') + '" data-discovery-row="' + attr(t.id) + '"><div class="discovery-date">' + esc(t.dates || 'Dates not published') + '</div><div class="discovery-row-main"><h3><a data-tournament-link="' + attr(t.id) + '" href="#tournament/' + attr(t.id) + '">' + esc(t.name) + '</a></h3><p>' + esc([t.city, t.location || t.state, (t.modes || []).join(' / ') || 'Format not published'].filter(Boolean).join(' · ')) + '</p><div class="discovery-events">' + discoveryEventsHTML(t) + '</div>' + (t.discovery.circuitLabels.length ? '<p>' + esc(t.discovery.circuitLabels.join(' · ')) + '</p>' : '') + (discoveryState.origin ? '<p>' + esc(discoveryDistance(t)) + '</p>' : '') + '</div><div class="discovery-row-actions"><span>' + esc(t.registration || 'Registration not published') + '</span><div><button data-preview="' + attr(t.id) + '" aria-haspopup="dialog" aria-label="Preview ' + attr(t.name) + '">Preview</button>' + discoverySaveHTML(t) + '</div></div></article>';
+  const location = [...new Set([t.city, t.location || t.state, (t.modes || []).join(' / ') || 'Format not published'].filter(Boolean))].join(' · ');
+  return '<article class="discovery-row' + (discoveryState.preview?.id === t.id ? ' is-previewed' : '') + '" data-discovery-row="' + attr(t.id) + '">' +
+    '<div class="discovery-date"><span class="discovery-field-label">Date</span>' + esc(t.dates || 'Dates not published') + '</div>' +
+    '<div class="discovery-row-main"><h3><a data-tournament-link="' + attr(t.id) + '" href="#tournament/' + attr(t.id) + '">' + esc(t.name) + '</a></h3><div class="discovery-events"><span class="discovery-field-label">Events</span>' + discoveryEventsHTML(t) + '</div>' +
+    (t.discovery.circuitLabels.length ? '<p>' + esc(t.discovery.circuitLabels.join(' · ')) + '</p>' : '') + '</div>' +
+    '<div class="discovery-row-location"><span class="discovery-field-label">Location / format</span>' + esc(location) + (discoveryState.origin ? '<p>' + esc(discoveryDistance(t)) + '</p>' : '') + '</div>' +
+    '<div class="discovery-row-actions"><span><span class="discovery-field-label">Registration</span>' + esc(t.registration || 'Not published') + '</span><div><button data-preview="' + attr(t.id) + '" aria-haspopup="dialog" aria-label="Preview ' + attr(t.name) + '">Preview</button>' + discoverySaveHTML(t) + '</div></div></article>';
 }
 function discoveryCoverage() {
   const items = discoveryBase();
   const checked = items.filter(t => discoveryState.metadata[t.id]);
   const available = checked.filter(t => discoveryState.metadata[t.id].status === 'available').length;
   const failed = checked.filter(t => discoveryState.metadata[t.id].status === 'failed').length;
-  const unavailable = checked.some(t => discoveryState.metadata[t.id].status === 'unavailable');
-  return checked.length + ' of ' + items.length + ' listed tournaments checked · ' + available + ' with published details' + (failed ? ' · ' + failed + ' failed checks' : '') + '. Matches may be incomplete.' + (unavailable ? ' Retry unavailable details after 1 minute from the last check (up to 12 per click).' : '');
+  return checked.length + ' of ' + items.length + ' checked · ' + available + ' with published details' + (failed ? ' · ' + failed + ' failed checks' : '') + '. Matches may be incomplete.';
 }
 function discoveryDrawResults() {
   if (!discoveryActive()) return;
@@ -127,13 +132,17 @@ function discoveryDrawResults() {
   $('#discovery-count').textContent = results.length + (results.length === 1 ? ' tournament' : ' tournaments');
   $('#discovery-coverage').textContent = discoveryCoverage();
   const next = discoveryUnchecked();
-  $('#discovery-check-next').disabled = discoveryState.metadataBusy || discoveryState.calendarBusy || !next.length;
-  $('#discovery-check-next').textContent = discoveryState.metadataBusy ? 'Checking published details…' : next.length ? 'Check next ' + Math.min(12, next.length) : 'Listed details checked';
+  const pendingMessage = discoveryState.metadataBusy ? 'Checking published details…' : discoveryState.calendarBusy ? 'Updating tournament listing…' : '';
+  const checkNext = $('#discovery-check-next');
+  checkNext.disabled = Boolean(pendingMessage) || !next.length;
+  checkNext.hidden = !pendingMessage && !next.length;
+  checkNext.textContent = pendingMessage || (next.length ? 'Check next ' + Math.min(12, next.length) : 'Listed details checked');
+  $('#discovery-check-status').textContent = pendingMessage;
   $('#discovery-show-more').hidden = results.length <= discoveryState.visible;
   $('#discovery-retry-details').hidden = !discoveryBase().some(t => ['failed','unavailable'].includes(discoveryState.metadata[t.id]?.status));
   $('#discovery-retry-details').disabled = discoveryState.metadataBusy || discoveryState.calendarBusy;
   discoveryState.animation?.cancel();
-  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && region.animate) discoveryState.animation = region.animate([{opacity:0.65},{opacity:1}], {duration:180});
+  if (document.documentElement.dataset.motion !== 'reduce' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && region.animate) discoveryState.animation = region.animate([{opacity:0.65},{opacity:1}], {duration:180});
 }
 function discoveryChips() {
   const chips = [];
@@ -410,6 +419,7 @@ function discoveryKeydown(event) {
   if (!discoveryActive() || event.isComposing) return;
   const active = document.activeElement;
   const dialog = $('#discovery-preview');
+  if (document.querySelector('dialog[open]')?.open && !dialog.open) return;
   if (event.key === 'Tab' && dialog.open) {
     // Native modality makes the page inert, but browsers can still move Tab
     // into their chrome after the last control. Keep the preview's cycle local.

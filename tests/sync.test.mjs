@@ -29,6 +29,7 @@ function sandbox() {
     fetch: async () => ({ ok: true, json: async () => ({}) }),
     console,
   });
+  vm.runInContext(fs.readFileSync("web/schedule.js", "utf8"), context);
   vm.runInContext(head, context);
   return { context, node, document };
 }

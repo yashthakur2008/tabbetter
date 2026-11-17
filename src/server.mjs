@@ -106,16 +106,19 @@ export default {
         }, 502);
       }
     }
-    if (url.pathname === "/logo.png")
-      return new Response(
-        Uint8Array.from(atob(logo), (c) => c.charCodeAt(0)),
-        {
-          headers: {
-            "content-type": "image/png",
-            "cache-control": "public,max-age=86400",
-          },
+    // Versioned assets are immutable. The legacy logo URL remains a revalidating
+    // alias, so old links never display a different brand from the current app.
+    const legacyBrand = { "/logo.png": "/assets/touch-icon-v2.png", "/favicon.ico": "/assets/favicon-v2.ico" };
+    const brandPath = Object.hasOwn(legacyBrand, url.pathname) ? legacyBrand[url.pathname] : url.pathname;
+    const brand = Object.hasOwn(brandAssets, brandPath) ? brandAssets[brandPath] : null;
+    if (brand)
+      return new Response(Uint8Array.from(atob(brand.data), c => c.charCodeAt(0)), {
+        headers: {
+          "content-type": brand.type,
+          "cache-control": Object.hasOwn(legacyBrand, url.pathname) ? "no-cache" : "public, max-age=31536000, immutable",
+          "x-content-type-options": "nosniff",
         },
-      );
+      });
     if (url.pathname === "/api/calendar") {
       const params = new URLSearchParams();
       for (const key of ["year", "circuit_id", "state", "country"]) {

@@ -343,7 +343,7 @@ function renderCompetitorProfile(data) {
     $("#app").innerHTML =
       '<div class="empty-note"><h3>Historical rankings unavailable</h3><p>' +
       esc(data.reason || "Historical rankings are not included in this build.") +
-      "</p></div>" +
+      '</p><p>This is not a sign-in issue. Historical rankings require an available, verified source and redistribution permission. Signing in will not unlock them here.</p><p><a href="#discover">Find tournaments and published results</a> · <a href="#help">See available tools and limitations</a></p></div>' +
       footer;
     return;
   }
@@ -1009,7 +1009,7 @@ function drawCalendar() {
               t.id +
               '">' +
               esc(t.name) +
-              '</button><div style="font-size:10px;color:var(--muted);margin-top:5px">' +
+              '</button><div style="font-size:0.625rem;color:var(--muted);margin-top:5px">' +
               esc([t.city, t.location].filter(Boolean).join(" · ")) +
               (t.judgeSignup ? " · Seeking judges" : "") +
               '</div></td><td class="hide-medium">' +
@@ -1295,6 +1295,7 @@ async function loadTournament(id, { background = false } = {}) {
     return;
   }
   if (!background) loading();
+  scheduleChoice.enter(id);
   if (lastId !== id) {
     detailFilter = "";
     detailEvent = "";
@@ -1352,24 +1353,23 @@ function renderInvitationParagraph(text, segments) {
     return label;
   }).join("") + "</p>";
 }
+function tournamentNavigationHTML(sub) {
+  const buttons = items => items.map(([key, name]) =>
+    '<button class="' + (sub === key ? 'active' : '') + '"' +
+    (sub === key ? ' aria-current="page"' : '') + ' data-sub="' + key + '">' + name + '</button>').join('');
+  return '<nav class="subnav tournament-tasks" aria-label="Tournament sections">' + buttons([
+    ['overview', 'Overview'], ['schedule', 'Schedule'], ['pairings', 'Pairings'],
+    ['entries', 'Entries'], ['judges', 'Judges'], ['results', 'Results'],
+  ]) + '</nav><nav class="subnav tournament-additional" aria-label="Additional tournament sections"><span>More tournament information</span>' + buttons([
+    ['events', 'Events'], ['schools', 'Schools'], ['statistics', 'Statistics'], ['resources', 'Resources'],
+  ]) + '</nav>';
+}
 function renderDetail() {
   const { id, sub, event } = route();
   if (sub === "entries" && event) detailEvent = event;
   const d = tournament,
     inv = invitation,
     t = d || inv;
-  const tabs = [
-    ["overview", "Invitation"],
-    ["events", "Events"],
-    ["entries", "Entries"],
-    ["schools", "Schools"],
-    ["judges", "Judges"],
-    ["pairings", "Pairings"],
-    ["results", "Results"],
-    ["statistics", "Statistics"],
-    ["schedule", "Schedule"],
-    ["resources", "Resources"],
-  ];
   $("#app").innerHTML =
     '<div class="detail-header"><a href="#discover" class="smalltext">← All tournaments</a><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-top:20px"><div><div class="eyebrow">TOURNAMENT WORKSPACE</div><h1>' +
     esc(t.name) +
@@ -1380,20 +1380,8 @@ function renderDetail() {
       : "") +
     '</div></div><button class="btn" id="save-detail">' +
     (isSaved(id) ? "★ Saved" : "☆ Save") +
-    '</button></div></div><nav class="subnav" aria-label="Tournament sections">' +
-    tabs
-      .map(
-        ([key, name]) =>
-          '<button class="' +
-          (sub === key ? "active" : "") +
-          '" data-sub="' +
-          key +
-          '">' +
-          name +
-          "</button>",
-      )
-      .join("") +
-    '</nav><div class="detail-layout"><section id="detail-content"></section><aside class="aside tournament-resources"><div class="card sidecard"><h3>Official tournament</h3>' +
+    '</button></div></div>' + tournamentNavigationHTML(sub) +
+    '<div class="detail-layout"><section id="detail-content"></section><aside class="aside tournament-resources"><div class="card sidecard"><h3>Official tournament</h3>' +
     external(href(id), "Invitation", "linkrow") +
     external(href(id, "fields"), "Entry lists", "linkrow") +
     external(href(id, "judges"), "Judge lists", "linkrow") +
@@ -1555,7 +1543,7 @@ function renderDetail() {
   } else if (sub === "statistics") {
     reconcileRoundFilters();
     target.innerHTML =
-      '<h2 style="margin-bottom:6px">Published statistics</h2><p class="sub" style="font-size:12px;margin-bottom:18px">Counts come from published ballots only. Rounds that are unpublished, in progress or restricted are not included.</p><div class="round-filters"><label for="stat-event">Event<select id="stat-event">' +
+      '<h2 style="margin-bottom:6px">Published statistics</h2><p class="sub" style="font-size:0.75rem;margin-bottom:18px">Counts come from published ballots only. Rounds that are unpublished, in progress or restricted are not included.</p><div class="round-filters"><label for="stat-event">Event<select id="stat-event">' +
       opts(d.events.map((e) => ({ value: e.id, label: e.name })), roundEvent, "All events") +
       '</select></label><label for="stat-round">Round<select id="stat-round" ' +
       (!roundEvent ? "disabled" : "") +
@@ -1584,28 +1572,7 @@ function renderDetail() {
       ? renderMemberRecord(kind, rest.join(":"))
       : '<div class="card empty">Record not found.</div>';
   } else if (sub === "schedule") {
-    const times = d.timeslots;
-    target.innerHTML =
-      '<div class="switch-row"><h2>Published schedule</h2><button class="btn" id="ics">↓ Calendar</button></div><p class="sub" style="font-size:12px;margin-bottom:18px">Times shown in ' +
-      esc(d.timezone) +
-      ". Refer to the invitation for event-specific start times.</p>" +
-      (times.length
-        ? '<div class="card schedule">' +
-          times
-            .map(
-              (t) =>
-                '<div class="schedule-row"><span class="dot"></span><div><strong>' +
-                esc(t.name) +
-                "</strong><small>" +
-                esc(formatDate(t.start, d.timezone)) +
-                " – " +
-                esc(formatDate(t.end, d.timezone)) +
-                "</small></div></div>",
-            )
-            .join("") +
-          "</div>"
-        : '<div class="card empty">No structured schedule has been published. Check the invitation.</div>');
-    $("#ics").onclick = exportICS;
+    renderSchedule(target, d);
   } else if (sub === "resources") {
     const links = (inv?.links || []).filter(
       (l) => !l.url.includes("/user/login"),
@@ -2013,27 +1980,35 @@ function renderEntryBallots(entry) {
         (scores ? '<small>' + esc(scores) + '</small>' : '') + '</li>';
     }).join('') + '</ul>';
 }
+let themeController;
 function initTheme() {
-  const choices = ["system", "light", "dark", "midnight"];
-  let preference = "light";
-  try {
-    const stored = localStorage.getItem("tabbetter-theme");
-    if (choices.includes(stored)) preference = stored;
-  } catch { /* Storage can be unavailable in private browsing. */ }
-  const media = window.matchMedia("(prefers-color-scheme: dark)");
-  const select = $("#theme");
-  const apply = () => {
-    document.documentElement.dataset.theme = preference === "system"
-      ? (media.matches ? "dark" : "light") : preference;
-    select.value = preference;
-  };
-  select.addEventListener("change", () => {
-    preference = choices.includes(select.value) ? select.value : "system";
-    try { localStorage.setItem("tabbetter-theme", preference); } catch { /* Keep session choice. */ }
-    apply();
-  });
-  media.addEventListener("change", apply);
-  apply();
+  if (!themeController) {
+    const choices = ["system", "light", "dark", "midnight"];
+    let preference = "light";
+    try {
+      const stored = localStorage.getItem("tabbetter-theme");
+      if (choices.includes(stored)) preference = stored;
+    } catch { /* Storage can be unavailable in private browsing. */ }
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      document.documentElement.dataset.theme = preference === "system"
+        ? (media.matches ? "dark" : "light") : preference;
+      const select = $("#theme");
+      if (select) select.value = preference;
+    };
+    themeController = {apply, bind(select) {
+      if (!select || select === this.select) return;
+      this.select = select;
+      select.addEventListener("change", () => {
+        preference = choices.includes(select.value) ? select.value : "light";
+        try { localStorage.setItem("tabbetter-theme", preference); } catch { /* Keep session choice. */ }
+        apply();
+      });
+    }};
+    media.addEventListener("change", apply);
+  }
+  themeController.bind($("#theme"));
+  themeController.apply();
 }
 function reconcileRoundFilters() {
   if (!tournament.events.some((e) => e.id === roundEvent)) roundEvent = "";
@@ -2166,50 +2141,6 @@ function drawRounds(sub) {
     revealCards($("#round-list"), ".round-card", "results:" + d.id);
   }
 }
-function exportICS() {
-  const d = tournament;
-  const stamp = (s) =>
-    s.replace(/[-: ]/g, "").replace(/^(\d{8})(\d{6})$/, "$1T$2") + "Z";
-  const safe = (s) =>
-    String(s || "")
-      .replace(/\\/g, "\\\\")
-      .replace(/\r?\n/g, "\\n")
-      .replace(/,/g, "\\,")
-      .replace(/;/g, "\\;");
-  const events = d.timeslots.filter(
-    (t) =>
-      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(t.start) &&
-      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(t.end),
-  );
-  if (!events.length) {
-    toast("No structured schedule is available to export.");
-    return;
-  }
-  download(
-    [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//TabBetter//Schedule//EN",
-      ...events.flatMap((t, i) => [
-        "BEGIN:VEVENT",
-        "UID:" + d.id + "-" + i + "@tabbetter",
-        "DTSTAMP:" +
-          new Date()
-            .toISOString()
-            .replace(/[-:]/g, "")
-            .replace(/\.\d{3}/, ""),
-        "DTSTART:" + stamp(t.start),
-        "DTEND:" + stamp(t.end),
-        "SUMMARY:" + safe(d.name + " — " + t.name),
-        "URL:" + href(d.id),
-        "END:VEVENT",
-      ]),
-      "END:VCALENDAR",
-    ].join("\r\n"),
-    "tabbetter-" + d.id + ".ics",
-    "text/calendar",
-  );
-}
 function toolPage(name) {
   const titles = {
     results: [
@@ -2241,7 +2172,7 @@ function toolPage(name) {
   let content = "";
   if (["results", "judging"].includes(name)) {
     content =
-      '<div class="card" style="margin-top:24px"><h2>Open a tournament workspace</h2><p class="sub" style="font-size:12px;margin:12px 0 20px">Paste its Tabroom link, then use ' +
+      '<div class="card" style="margin-top:24px"><h2>Open a tournament workspace</h2><p class="sub" style="font-size:0.75rem;margin:12px 0 20px">Paste its Tabroom link, then use ' +
       (name === "results"
         ? "Results"
         : "Pairings to search for your judge name") +
@@ -2262,7 +2193,7 @@ function toolPage(name) {
   }
   if (name === "paradigms")
     content =
-      '<div class="card" style="margin-top:24px"><h2>Judge paradigm directory</h2><p class="sub" style="font-size:13px;margin:14px 0 20px">Read judges’ preferences and experience before the round.</p>' +
+      '<div class="card" style="margin-top:24px"><h2>Judge paradigm directory</h2><p class="sub" style="font-size:0.8125rem;margin:14px 0 20px">Read judges’ preferences and experience before the round.</p>' +
       external(
         official + "/index/paradigm.mhtml",
         "Browse paradigms on Tabroom",
@@ -2355,7 +2286,7 @@ function toolPage(name) {
       "</div>";
   if (name === "about")
     content =
-      '<div class="card prose" style="margin-top:24px"><img class="about-brand" src="/logo.png" alt="TabBetter"><h2>Made for the moments between rounds.</h2><p><strong>Yash Thakur — Co-founder</strong></p><p style="margin-top:15px">Discover tournaments, save your circuit’s calendar, browse entries and judges, and read published pairings without losing your place.</p><p>TabBetter uses public Tabroom pages and public JSON exports. Every data view shows its source and retrieval time. Availability depends on the tournament’s publication settings and Tabroom access.</p><p>This is an early build, not complete feature parity. Account actions, ballot submission, paradigms and tournament administration open on the official site. Automatic assignment-change notifications are not connected.</p><h2>Source & acknowledgments</h2><p>Tabroom is developed by the National Speech & Debate Association. Its code and schema helped us understand public data relationships. TabBetter’s interface and adapters are independently implemented.</p>' +
+      '<div class="card prose" style="margin-top:24px"><img class="about-brand" src="/assets/mark-v2.svg" alt="" width="64" height="64"><h2>Made for the moments between rounds.</h2><p><strong>Yash Thakur — Co-founder</strong></p><p style="margin-top:15px">Discover tournaments, save your circuit’s calendar, browse entries and judges, and read published pairings without losing your place.</p><p>TabBetter uses public Tabroom pages and public JSON exports. Every data view shows its source and retrieval time. Availability depends on the tournament’s publication settings and Tabroom access.</p><p>This is an early build, not complete feature parity. Account actions, ballot submission, paradigms and tournament administration open on the official site. Automatic assignment-change notifications are not connected.</p><h2>Source & acknowledgments</h2><p>Tabroom is developed by the National Speech & Debate Association. Its code and schema helped us understand public data relationships. TabBetter’s interface and adapters are independently implemented.</p>' +
       external("https://github.com/speechanddebate/tabroom", "Legacy source") +
       " " +
       external(
@@ -2376,9 +2307,10 @@ async function renderRoute() {
   if (typeof unmountDiscoveryWorkspace === "function") unmountDiscoveryWorkspace();
   routeToken++;
   const r = route();
-  document.querySelectorAll(".more-nav[open]").forEach(menu => menu.removeAttribute("open"));
+  if (typeof workspaceRouteChanged === "function") workspaceRouteChanged();
   $("#crumb").textContent =
     {
+      settings: "Settings",
       discover: "Tournaments",
       saved: "Saved tournaments",
       circuits: "Circuits",
@@ -2402,7 +2334,9 @@ async function renderRoute() {
   document.title =
     (r.name === "tournament" && tournament ? tournament.name + " · " : "") +
     "TabBetter";
-  if (r.name === "discover" || r.name === "saved") {
+  if (r.name === "settings") {
+    if (typeof renderWorkspaceSettings === "function") renderWorkspaceSettings();
+  } else if (r.name === "discover" || r.name === "saved") {
     if (calendar) calendarShell();
     else await loadCalendar();
   } else if (r.name === "circuits") await circuitsPage();

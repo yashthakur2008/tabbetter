@@ -17,12 +17,12 @@ Verified on 2026-10-26:
 
 ## Repository deployment status
 
-The production Worker was deployed manually from repository source. Automatic GitHub deployment is **not enabled yet**:
+The production Worker is published manually from validated repository source using an authorized local Wrangler OAuth session. The deployment workflow is now merged into `main`, but automatic **publishing** is not configured:
 
-1. PR #14 contains the deployment configuration and requires one approving review before merge. Branch protection has not been bypassed.
-2. `CLOUDFLARE_ACCOUNT_ID` is configured as a repository secret. `CLOUDFLARE_API_TOKEN` still needs to be created and saved.
+1. `main` requires passing Repository checks and CodeQL. The owner explicitly removed the independent-review requirement for this solo-maintainer repository; the required approval count is zero. Other branch protections remain enabled.
+2. `CLOUDFLARE_ACCOUNT_ID` is configured as a repository secret. `CLOUDFLARE_API_TOKEN` is still absent (verified 2026-11-17).
 
-The proposed `.github/workflows/deploy.yml` checks hygiene, parser tests, build, runtime tests and the deployable artifact before publishing pushes to `main`. Until the token is configured, publishing is skipped with a warning. A successful checks-only run is not evidence of a deployment.
+`.github/workflows/deploy.yml` checks hygiene, parser tests, build, regression tests and the deployable artifact on pushes to `main`. Until the token is configured, its publishing step is skipped with a warning. A successful checks-only run or merged PR is not evidence that the live site changed. Manual OAuth publishing does not require placing the local OAuth credential in GitHub secrets.
 
 Use a scoped token with Account Workers Scripts Edit and Account Settings Read, plus Zone Workers Routes Edit, Zone Read and SSL and Certificates Edit. Limit account access to the account above and zone access to `tabbetter.com`. Never store the token in the repository or paste it into chat.
 

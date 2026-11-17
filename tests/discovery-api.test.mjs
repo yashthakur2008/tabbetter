@@ -83,7 +83,7 @@ test('compiler embeds shared source before legacy app and guards new embedded as
   const dir=fs.mkdtempSync(parent+'/discovery-compile-');
   try {
     for(const path of ['src','web','assets','scripts'])fs.cpSync(path,dir+'/'+path,{recursive:true});
-    for(const [file,payload] of [['src/discovery.mjs','// </script>'],['web/discovery.js','// </script>'],['web/discovery.css','/* </style> */']]){
+    for(const [file,payload] of [['src/discovery.mjs','// </script>'],['web/discovery.js','// </script>'],['web/discovery.css','/* </style> */'],['web/workspace.js','// </script>'],['web/tutorial.js','// </script>'],['web/workspace.css','/* </style> */']]){
       const path=dir+'/'+file;const old=fs.existsSync(path)?fs.readFileSync(path):null;
       fs.appendFileSync(path,'\n'+payload);
       assert.throws(()=>execFileSync(process.execPath,['scripts/compile.mjs'],{cwd:dir,stdio:'pipe'}),/Command failed/);
