@@ -1,7 +1,7 @@
 # TabBetter competition workspace design
 
 Date: 2026-11-16
-Status: Direction approved in chat; written specification awaiting review.
+Status: Written specification approved by the user on 2026-11-17; implementation in progress.
 Baseline: merged main 9275f0d, deployed 2026-11-10.
 
 ## Goal and approved direction
