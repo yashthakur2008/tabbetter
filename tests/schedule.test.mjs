@@ -104,3 +104,26 @@ test('validated tournament IANA alias is offered under its published name',()=>{
   assert.deepEqual(Array.from(a.analyzeSchedule(d,'').options),['UTC','US/Pacific']);
   assert.equal(a.analyzeSchedule(d,'US/Pacific').status,'ready');
 });
+test('explicit-only instants export without tournament timezone using disclosed UTC presentation',()=>{
+  const a=api();
+  for(const timezone of ['', 'Not/AZone'])for(const [start,end] of [
+    ['2026-10-24T15:30:00Z','2026-10-24T17:15:00Z'],
+    ['2026-10-24T08:30:00-07:00','2026-10-24T19:15:00+02:00'],
+    ['2026-10-24T15:30:00Z','2026-10-24T10:15:00-07:00'],
+  ]) {
+    const d={...tournament,timezone,timeslots:[{name:'Explicit round',start,end}]},r=a.analyzeSchedule(d,'');
+    assert.equal(r.status,'ready');assert.equal(r.needsChoice,false);
+    assert.match(r.message,/tournament timezone.*(?:not published|invalid)/i);
+    assert.match(r.message,/displayed in UTC/i);assert.match(r.rows[0].startLabel,/3:30 PM UTC/);
+    assert.equal(d.timezone,timezone,'display fallback must not invent source metadata');
+    const ics=a.scheduleICS(d,r);assert.match(ics,/DTSTART:20261024T153000Z/);assert.match(ics,/DTEND:20261024T171500Z/);
+  }
+});
+test('missing or invalid tournament zone never auto-interprets mixed or offsetless values',()=>{
+  const a=api();
+  for(const timezone of ['', 'Not/AZone'])for(const start of ['2026-10-24T15:30:00Z','2026-10-24T15:30:00']) {
+    const d={...tournament,timezone,timeslots:[{start,end:'2026-10-24T17:15:00'}]};
+    const r=a.analyzeSchedule(d,'');assert.equal(r.status,'invalid');assert.equal(r.needsChoice,true);
+    assert.equal(r.rows[0].end,null);assert.throws(()=>a.scheduleICS(d,r));
+  }
+});

@@ -81,8 +81,9 @@ function analyzeSchedule(data, interpretation) {
       const choice = options.includes(interpretation) ? interpretation : '';
       row.start = resolveScheduleTime(start, choice);
       row.end = resolveScheduleTime(end, choice);
-      row.startLabel = zone ? scheduleTimeLabel(start, row.start, zone) : start.raw;
-      row.endLabel = zone ? scheduleTimeLabel(end, row.end, zone) : end.raw;
+      const displayZone = zone || (start.instant !== null && end.instant !== null ? 'UTC' : '');
+      row.startLabel = displayZone ? scheduleTimeLabel(start, row.start, displayZone) : start.raw;
+      row.endLabel = displayZone ? scheduleTimeLabel(end, row.end, displayZone) : end.raw;
       if (row.start !== null && row.end !== null && row.end <= row.start)
         throw Error('Invalid range: end must be after start.');
       // An unresolved entirely wall-time range can still be demonstrably invalid.
@@ -90,9 +91,10 @@ function analyzeSchedule(data, interpretation) {
         throw Error('Invalid range: end must be after start.');
     } catch (error) { errors.push(row.name + ': ' + error.message); }
   }
-  if (!zone) errors.unshift('Invalid or missing tournament timezone. Ask the organizer to confirm it before calendar export.');
+  if (!zone && result.needsChoice) errors.unshift('Invalid or missing tournament timezone. Ask the organizer to confirm it before calendar export.');
   if (errors.length) return {...result, status: 'invalid', message: errors.join(' ')};
   if (result.needsChoice && !options.includes(interpretation)) return {...result, status: 'choice', message: 'Timezone not specified in source. Choose how to interpret source times. This affects both displayed conversion and calendar export. Check the invitation or ask the organizer before choosing.'};
+  if (!zone) return {...result, message: 'Tournament timezone ' + (data.timezone ? 'is invalid' : 'not published') + '. Source times include explicit offsets and are displayed in UTC. Calendar export uses these known instants, not an inferred tournament timezone.'};
   result.message = (result.needsChoice ? 'Source times interpreted as ' + interpretation + '. ' : 'Source times include explicit offsets. ') + 'Displayed in ' + data.timezone + '; calendar export uses the same instants.';
   return result;
 }
@@ -127,7 +129,7 @@ function renderSchedule(target, data) {
     target.innerHTML = '<div class="switch-row"><h2>Published schedule</h2><button class="btn" id="ics"' +
       (['empty', 'invalid'].includes(result.status) ? ' disabled' : '') + '>↓ Calendar</button></div>' +
       '<p class="sub">Tournament timezone: ' + esc(data.timezone || 'Not published') +
-      '. <a id="schedule-invitation" href="#tournament/' + attr(data.id) + '/invitation">Check the invitation</a> for event-specific start times.</p>' +
+      '. <a id="schedule-invitation" href="#tournament/' + attr(data.id) + '/overview">Check the invitation</a> for event-specific start times.</p>' +
       (result.needsChoice ? '<label for="schedule-interpretation">Interpret source times as</label><select id="schedule-interpretation" aria-describedby="schedule-feedback"><option value="">Choose an interpretation</option>' +
         result.options.map(zone => '<option value="' + attr(zone) + '"' + (scheduleChoice.get() === zone ? ' selected' : '') + '>' + esc(zone) + '</option>').join('') + '</select>' : '') +
       '<p id="schedule-feedback" class="sub" role="status">' + esc(result.message) + '</p>' +
