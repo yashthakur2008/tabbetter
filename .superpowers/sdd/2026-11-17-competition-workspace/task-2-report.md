@@ -118,3 +118,44 @@ Scratch reproductions: sibling `compare-task2.cjs` is the existing comparison ha
 - Branding routes were verified through the compiled local Worker, not a deployment. No deployment occurred.
 - Large text prioritizes readable wrapping over the default-density targets. At 150%, rows and navigation naturally become taller. Default fresh mobile does not fit every first-row action above the fold.
 - The reviewed specification's independent-companion wording and official handoffs remain. No account or fabricated personal data was introduced.
+
+## Review follow-up: P2 pending metadata feedback
+
+Follow-up to `task-2-review.md`, based on implementation `638396d` / report `f93873a`. The review correctly found that the former `#discovery-check-next:disabled { display: none; }` conflated busy and exhausted states. This appendix supersedes the earlier reference to hiding the “completed/disabled” action: **only idle exhaustion is hidden**, not every disabled state.
+
+### Fix and scope
+
+- Removed the disabled-visibility CSS rule. `discoveryDrawResults()` now explicitly sets `hidden` only when there is neither pending work nor an unchecked next batch.
+- Pending checks retain a **visible, disabled** `Checking published details…` button. Pending listing refreshes likewise use an accurate `Updating tournament listing…` label, without changing any calendar/source behavior. Pending retries remain visible even when all records were previously checked.
+- Added a persistent, visually hidden `#discovery-check-status` with `role="status"` and `aria-live="polite"`. It mirrors the visible busy label for assistive-technology announcement and clears when work completes. This is DOM/accessibility-markup verification, not a claim of operating a screen reader.
+- Idle exhaustion still removes the action from layout. The settled compact density and responsive acceptance tests remain green. No Task 3 Calendar, timezone, source or ICS repair was made.
+
+### Red-first reproduction and validation
+
+New `tests/discovery-progress-browser.test.mjs` serves **24 external tournament fixtures** through the real compiled Worker and adapters. After the automatic first batch reaches 12 of 24, it gates actual external responses for the second batch, then activates the real Check next button. No application function or DOM state is substituted. An initial fixture-ordering mistake blocked the automatic batch and timed out; deterministic padded names corrected that harness issue before recording the expected regression failure.
+
+Before the fix, the test failed specifically with `busy metadata action must not disappear with disabled state`, actual visibility **false**. After the fix, Chromium/Firefox/WebKit pass with this observed pending/completed transition:
+
+- Pending: button text `Checking published details…`, computed display `block`, button disabled, coverage still **12 of 24 checked · 12 with published details. Matches may be incomplete.**, and **12 rows still explicitly marked Details not checked**.
+- Completion after releasing the external-response gate: **24 of 24 checked · 24 with published details**, no unchecked-row labels, busy status empty, action visibility **false**.
+
+A separate red-first unit regression covers idle/unchecked, idle/exhausted, busy metadata with no unchecked IDs (retry), pending listing and completion. Its implementation executes the actual discovery renderer.
+
+Final follow-up checks:
+
+| Check | Result |
+|---|---|
+| Full `npm test` with existing Playwright browser opt-in | **339 passed, 0 failed, 0 skipped** |
+| Firefox progress + competition + workspace browser tests | **6 passed, 0 failed, 0 skipped** |
+| WebKit progress + competition + workspace browser tests | **6 passed, 0 failed, 0 skipped** |
+| Existing discovery browser suite | Passed unchanged |
+| Existing member/paradigm browser suite | Passed unchanged |
+| `npm run check`, `npm run validate`, `git diff --check` | Passed |
+
+Follow-up evidence under the same root `/Users/yashthakur/.jcode/scratch/tabbetter-workspace-20261117/evidence/`:
+
+- `task2-review-progress-red.log`, `task2-review-state-red.log`, `task2-review-progress-green.log`.
+- `task2-review-full.log`, `task2-review-firefox.log`, `task2-review-webkit.log`, `task2-review-discovery.log`, `task2-review-members.log`.
+- `task2-{chromium,firefox,webkit}-metadata-progress.json` and `task2-{chromium,firefox,webkit}-metadata-pending.png` contain the real delayed-request evidence. Existing competition screenshots/metrics were refreshed during the full and cross-engine runs.
+
+Only discovery presentation, its focused regressions and this report changed. The independent reviewer should recheck P2 before Task 2 is accepted. No deployment occurred.

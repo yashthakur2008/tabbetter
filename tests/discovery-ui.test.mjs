@@ -400,3 +400,21 @@ test('coverage keeps a concise warning and exposes retry explanation in a disclo
   assert.match(html,/1 minute/);
   assert.match(html,/id="discovery-retry-details"/);
 });
+
+test('metadata action visibility distinguishes idle exhaustion from busy checks and retries', () => {
+  const a=harness();
+  a.run(`location.hash='#discover'; discoveryState.root={isConnected:true}; discoveryDrawResults()`);
+  assert.equal(a.node('#discovery-check-next').hidden,false);
+  a.run(`discoveryState.metadata={'1':{status:'available',events:[]},'2':{status:'available',events:[]}}; discoveryDrawResults()`);
+  assert.equal(a.node('#discovery-check-next').hidden,true,'hide only idle exhausted action');
+  a.run(`discoveryState.metadataBusy=true; discoveryDrawResults()`);
+  assert.equal(a.node('#discovery-check-next').hidden,false,'retry checking remains visible even without unchecked records');
+  assert.equal(a.node('#discovery-check-next').disabled,true);
+  assert.equal(a.node('#discovery-check-status').textContent,'Checking published details…');
+  a.run(`discoveryState.metadataBusy=false; discoveryState.calendarBusy=true; discoveryDrawResults()`);
+  assert.equal(a.node('#discovery-check-next').hidden,false,'pending listing is not idle exhaustion');
+  assert.equal(a.node('#discovery-check-status').textContent,'Updating tournament listing…');
+  a.run(`discoveryState.calendarBusy=false; discoveryDrawResults()`);
+  assert.equal(a.node('#discovery-check-next').hidden,true);
+  assert.equal(a.node('#discovery-check-status').textContent,'');
+});

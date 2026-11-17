@@ -68,7 +68,7 @@ function discoveryShellHTML() {
     '<p class="visually-hidden" id="discovery-radius-note">Set a location to enable distance filters.</p><div class="discovery-active"><div id="discovery-chips"></div></div>' +
     '<div id="discovery-calendar-status" role="status"></div><div class="discovery-results-head"><h2 id="discovery-count" tabindex="-1" aria-live="polite"></h2><label class="discovery-control"><span>Sort</span><select id="discovery-sort">' +
     [{id:'date',label:'Date'},{id:'distance',label:'Nearest first'},{id:'matches',label:'Preferred-event matches'},{id:'name',label:'Name A–Z'}].map(s=>'<option value="'+s.id+'" '+(discoveryState.sort===s.id?'selected':'')+'>'+s.label+'</option>').join('') +
-    '</select></label></div><p id="discovery-coverage"></p><div class="discovery-coverage-tools"><details id="discovery-coverage-help"><summary>About event coverage</summary><p>Only checked, published events can match event filters. Unchecked or unavailable details may hide matches. Retry unavailable details after 1 minute from the last check, up to 12 per click.</p></details><div class="discovery-check-actions"><button id="discovery-check-next">Check next 12</button><button id="discovery-retry-details" hidden>Retry details</button></div></div><p id="discovery-sort-note" role="status"></p><div id="discovery-results"></div><button id="discovery-show-more">Show more tournaments</button><div id="discovery-source">' + (calendar?.fetchedAt ? sourceLine(calendar, '10 min') : '') + '</div>' +
+    '</select></label></div><p id="discovery-coverage"></p><div class="discovery-coverage-tools"><details id="discovery-coverage-help"><summary>About event coverage</summary><p>Only checked, published events can match event filters. Unchecked or unavailable details may hide matches. Retry unavailable details after 1 minute from the last check, up to 12 per click.</p></details><div class="discovery-check-actions"><span id="discovery-check-status" class="visually-hidden" role="status" aria-live="polite"></span><button id="discovery-check-next">Check next 12</button><button id="discovery-retry-details" hidden>Retry details</button></div></div><p id="discovery-sort-note" role="status"></p><div id="discovery-results"></div><button id="discovery-show-more">Show more tournaments</button><div id="discovery-source">' + (calendar?.fetchedAt ? sourceLine(calendar, '10 min') : '') + '</div>' +
     '<dialog id="discovery-preview" class="discovery-preview" aria-labelledby="discovery-preview-title"><button id="discovery-preview-close" autofocus>Close preview</button><div id="discovery-preview-content"></div></dialog></section>' + footer;
 }
 function discoveryStatus(t) {
@@ -132,8 +132,12 @@ function discoveryDrawResults() {
   $('#discovery-count').textContent = results.length + (results.length === 1 ? ' tournament' : ' tournaments');
   $('#discovery-coverage').textContent = discoveryCoverage();
   const next = discoveryUnchecked();
-  $('#discovery-check-next').disabled = discoveryState.metadataBusy || discoveryState.calendarBusy || !next.length;
-  $('#discovery-check-next').textContent = discoveryState.metadataBusy ? 'Checking published details…' : next.length ? 'Check next ' + Math.min(12, next.length) : 'Listed details checked';
+  const pendingMessage = discoveryState.metadataBusy ? 'Checking published details…' : discoveryState.calendarBusy ? 'Updating tournament listing…' : '';
+  const checkNext = $('#discovery-check-next');
+  checkNext.disabled = Boolean(pendingMessage) || !next.length;
+  checkNext.hidden = !pendingMessage && !next.length;
+  checkNext.textContent = pendingMessage || (next.length ? 'Check next ' + Math.min(12, next.length) : 'Listed details checked');
+  $('#discovery-check-status').textContent = pendingMessage;
   $('#discovery-show-more').hidden = results.length <= discoveryState.visible;
   $('#discovery-retry-details').hidden = !discoveryBase().some(t => ['failed','unavailable'].includes(discoveryState.metadata[t.id]?.status));
   $('#discovery-retry-details').disabled = discoveryState.metadataBusy || discoveryState.calendarBusy;
