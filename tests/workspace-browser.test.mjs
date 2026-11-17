@@ -1,5 +1,5 @@
-// Opt-in real Chromium checks against the compiled Worker, with no API fixtures.
-// PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node --test tests/workspace-browser.test.mjs
+// Opt-in real Chromium/Firefox/WebKit checks against the compiled Worker, with no API fixtures.
+// PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs BROWSER_ENGINE=webkit node --test tests/workspace-browser.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -8,14 +8,28 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import worker from '../worker/index.js';
 const modulePath=process.env.PLAYWRIGHT_MODULE;
+const engineName=process.env.BROWSER_ENGINE || 'chromium';
+async function assertFocusCycle(page, dialog, selectors) {
+  for (const key of ['Tab','Shift+Tab']) {
+    await page.locator(selectors[0]).focus();
+    for (let i=1;i<=selectors.length*2;i++) {
+      await page.keyboard.press(key);
+      const index=key==='Tab' ? i%selectors.length : (selectors.length-i%selectors.length)%selectors.length;
+      assert.equal(await page.evaluate(selector=>document.activeElement.matches(selector),selectors[index]),true,`${engineName} ${key} must reach ${selectors[index]}`);
+      assert.equal(await page.evaluate(selector=>document.activeElement.closest(selector)!==null,dialog),true);
+      assert.equal(await page.evaluate(()=>document.hasFocus()),true);
+    }
+  }
+}
 async function screenshot(page, name) {
   const directory=process.env.TABBETTER_SCREENSHOT_DIR;
   if (!directory) return;
   fs.mkdirSync(directory,{recursive:true});
   await page.screenshot({path:path.join(directory,name+'.png'),fullPage:true});
 }
-test('compiled workspace: settings, tutorial, keyboard, drawer and storage fallback', {skip:!modulePath}, async()=>{
-  const {chromium}=await import(pathToFileURL(modulePath));
+async function withCompiledBrowser(run) {
+  const playwright=await import(pathToFileURL(modulePath));
+  assert.ok(['chromium','firefox','webkit'].includes(engineName),'supported browser engine');
   const server=http.createServer(async(req,res)=>{
     try {
       const response=await worker.fetch(new Request('http://localhost'+req.url),{}, {waitUntil:p=>p.catch(()=>{})});
@@ -23,9 +37,13 @@ test('compiled workspace: settings, tutorial, keyboard, drawer and storage fallb
     } catch(error) {console.error('Workspace browser test server request failed:',error);res.writeHead(500);res.end('Internal server error');}
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  const browser=await chromium.launch({headless:true});
+  let browser;
   try {
-    const base=`http://127.0.0.1:${server.address().port}`;
+    browser=await playwright[engineName].launch({headless:true});
+    await run(browser,`http://127.0.0.1:${server.address().port}`);
+  } finally {await browser?.close();await new Promise(resolve=>server.close(resolve));}
+}
+test(`compiled workspace (${engineName}): settings, tutorial, keyboard, drawer and storage fallback`, {skip:!modulePath}, ()=>withCompiledBrowser(async(browser,base)=>{
     const context=await browser.newContext({viewport:{width:1440,height:1000}});
     const page=await context.newPage(); const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(base+'/#help');
@@ -57,19 +75,15 @@ test('compiled workspace: settings, tutorial, keyboard, drawer and storage fallb
     assert.equal(await page.locator('#tutorial-enabled').isChecked(),true);
     await page.locator('#tutorial-dialog').waitFor({state:'visible'});
     assert.match(await page.locator('#tutorial-step-count').textContent(),/1 of 6/);
-    for (const key of ['Tab','Shift+Tab']) for (let i=0;i<12;i++) {
-      await page.keyboard.press(key);
-      assert.equal(await page.evaluate(()=>document.activeElement.closest('dialog')?.id),'tutorial-dialog', 'tutorial focus stays inside on '+key);
-    }
-    await page.keyboard.press('Shift+Tab');
-    assert.equal(await page.evaluate(()=>document.activeElement.closest('dialog')?.id),'tutorial-dialog');
-    await page.keyboard.press('Tab');
-    assert.equal(await page.evaluate(()=>document.activeElement.closest('dialog')?.id),'tutorial-dialog');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'tutorial-title','initial heading focus remains');
+    await assertFocusCycle(page,'#tutorial-dialog',['#tutorial-close','#tutorial-next']);
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#tutorial-dialog').isVisible(),false);
     assert.equal(await page.evaluate(()=>document.activeElement.id),'tutorial-replay');
     await page.locator('#tutorial-replay').click();
-    await page.locator('#tutorial-next').click(); await page.locator('#tutorial-back').click();
+    await page.locator('#tutorial-next').click();
+    await assertFocusCycle(page,'#tutorial-dialog',['#tutorial-close','#tutorial-back','#tutorial-next']);
+    await page.locator('#tutorial-back').click();
     assert.match(await page.locator('#tutorial-step-count').textContent(),/1 of 6/);
     for(let i=0;i<5;i++) {
       await page.locator('#tutorial-next').click();
@@ -80,6 +94,7 @@ test('compiled workspace: settings, tutorial, keyboard, drawer and storage fallb
       }
     }
     assert.match(await page.locator('#tutorial-dialog').textContent(),/You can turn this tutorial on or off in Settings → Tutorial. You can replay it there anytime\./);
+    await assertFocusCycle(page,'#tutorial-dialog',['#tutorial-close','#tutorial-back','#tutorial-settings','#tutorial-finish']);
     await screenshot(page,'task1-tutorial-final');
     await page.locator('#tutorial-finish').click();
     assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('tabbetter-workspace-v1')).completedVersion),1);
@@ -104,10 +119,13 @@ test('compiled workspace: settings, tutorial, keyboard, drawer and storage fallb
     assert.equal(await page.locator('#workspace-drawer').isVisible(),true);
     assert.equal(await page.locator('[data-nav="settings"]').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight),true,'drawer keeps Settings visible with extra-large text');
     await screenshot(page,'task1-mobile-drawer-extra-large');
-    for(const key of ['Tab','Shift+Tab']) for(let i=0;i<18;i++) {
-      await page.keyboard.press(key);
-      assert.equal(await page.evaluate(()=>document.activeElement.closest('dialog')?.id),'workspace-drawer');
-    }
+    await assertFocusCycle(page,'#workspace-drawer',[
+      '#workspace-drawer-close', '[data-nav="discover"]', '[data-nav="saved"]',
+      '[data-nav="circuits"]', '[data-nav="rankings"]', '[data-nav="results"]',
+      '[data-nav="help"]', '#workspace-navigation a[href="#about"]',
+      '[data-nav="judging"]', '[data-nav="paradigms"]', '[data-nav="account"]',
+      '#workspace-navigation a[href="https://www.tabroom.com/user/home.mhtml"]', '[data-nav="settings"]',
+    ]);
     await page.keyboard.press('Escape');
     assert.equal(await page.evaluate(()=>document.activeElement.id),'workspace-menu');
     await page.locator('#workspace-menu').click();
@@ -117,6 +135,7 @@ test('compiled workspace: settings, tutorial, keyboard, drawer and storage fallb
     await page.locator('#workspace-menu').click();
     await page.locator('#workspace-drawer [data-nav="settings"]').click(); await page.locator('#theme').waitFor();
     await page.emulateMedia({reducedMotion:'reduce'});await page.locator('#workspace-motion').selectOption('device');
+    await page.waitForFunction(()=>document.documentElement.dataset.motion==='reduce');
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.motion),'reduce','OS always wins');
     await page.locator('#tutorial-replay').click();
     await page.evaluate(()=>tutorialController.setEnabled(false));
@@ -135,5 +154,33 @@ test('compiled workspace: settings, tutorial, keyboard, drawer and storage fallb
     assert.equal(await denied.locator('#workspace-text-size').inputValue(),'large');
     assert.equal(await denied.locator('#tutorial-welcome').isVisible(),false);
     assert.deepEqual(deniedErrors,[]);await blocked.close();
-  } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
-});
+}));
+
+for (const focused of ['#workspace-drawer-close','[data-nav="saved"]']) {
+  test(`compiled workspace (${engineName}): desktop resize restores focus from ${focused}`, {skip:!modulePath}, ()=>withCompiledBrowser(async(browser,base)=>{
+    const page=await browser.newPage({viewport:{width:390,height:844}});
+    await page.goto(base+'/#settings');
+    await page.locator('#workspace-menu').click();
+    await page.locator(focused).focus();
+    await page.setViewportSize({width:1440,height:1000});
+    await page.locator('#workspace-drawer').waitFor({state:'hidden'});
+    const destination=focused==='#workspace-drawer-close' ? '[data-nav="settings"]' : focused;
+    assert.equal(await page.evaluate(selector=>document.activeElement.matches(selector),destination),true,'focus returns to visible desktop destination');
+    assert.equal(await page.locator(destination).isVisible(),true);
+    assert.equal(await page.evaluate(()=>document.hasFocus()),true);
+    assert.equal(await page.locator('#workspace-menu').getAttribute('aria-expanded'),'false');
+  }));
+}
+test(`compiled workspace (${engineName}): malformed preferences recover truthful persistence status`, {skip:!modulePath}, ()=>withCompiledBrowser(async(browser,base)=>{
+  const page=await browser.newPage();
+  await page.goto(base+'/#settings');
+  await page.evaluate(()=>localStorage.setItem('tabbetter-workspace-v1','broken'));
+  await page.reload();
+  assert.equal(await page.locator('#workspace-text-size').inputValue(),'default');
+  await page.locator('#workspace-text-size').selectOption('large');
+  assert.match(await page.locator('#workspace-persistence').textContent(),/Saved locally/);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('tabbetter-workspace-v1')).textSize),'large');
+  await page.reload();
+  assert.equal(await page.locator('#workspace-text-size').inputValue(),'large');
+  assert.match(await page.locator('#workspace-persistence').textContent(),/Saved locally/);
+}));

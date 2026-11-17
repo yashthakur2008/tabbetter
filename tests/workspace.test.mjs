@@ -57,3 +57,34 @@ test('theme initializes without a permanent select and binds remounted settings 
   select={value:'',addEventListener(_,fn){this.change=fn;}};
   vm.runInContext('initTheme()',context); assert.equal(select.value,'system');
 });
+
+test('malformed JSON is invalid data, not storage denial, and a valid write repairs it', () => {
+  const {prefs,storage,context}=preferences('broken');
+  assert.equal(prefs.get().textSize,'default');
+  assert.equal(prefs.persistent(),true);
+  prefs.update({textSize:'large'});
+  assert.equal(prefs.persistent(),true);
+  assert.equal(context.createWorkspacePreferences(storage).get().textSize,'large');
+});
+test('getItem rejection and setItem rejection are independent of malformed data and can recover', () => {
+  const {context}=preferences();
+  let readDenied=true, writeDenied=false;
+  const values=new Map();
+  const storage={
+    getItem(key) { if(readDenied)throw Error('read denied'); return values.get(key); },
+    setItem(key,value) { if(writeDenied)throw Error('write denied'); values.set(key,value); },
+  };
+  const prefs=context.createWorkspacePreferences(storage);
+  assert.equal(prefs.persistent(),false);
+  prefs.update({textSize:'large'});
+  assert.equal(prefs.persistent(),true,'successful write restores persistence feedback');
+  writeDenied=true;
+  prefs.update({textSize:'extra-large'});
+  assert.equal(prefs.get().textSize,'extra-large','write rejection retains session selection');
+  assert.equal(prefs.persistent(),false);
+  readDenied=false;writeDenied=false;
+  prefs.update({motion:'reduce'});
+  assert.equal(prefs.persistent(),true);
+  const reloaded=context.createWorkspacePreferences(storage).get();
+  assert.equal(reloaded.textSize,'extra-large');assert.equal(reloaded.motion,'reduce');
+});

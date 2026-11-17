@@ -9,16 +9,22 @@ function createWorkspacePreferences(storage) {
     if (typeof value.tutorialEnabled === "boolean") state.tutorialEnabled = value.tutorialEnabled;
     for (const key of ["dismissedVersion", "completedVersion"]) if ([0, 1].includes(value[key])) state[key] = value[key];
   }
+  let stored;
+  try { stored = storage.getItem("tabbetter-workspace-v1"); }
+  catch { persistent = false; }
   try {
-    const value = JSON.parse(storage.getItem("tabbetter-workspace-v1") || "null");
+    const value = JSON.parse(stored || "null");
     if (value?.version === 1) accept(value);
-  } catch { persistent = false; }
+  } catch { /* Invalid preference data is not evidence of unavailable storage. */ }
   return {
     get: () => ({...state}),
     persistent: () => persistent,
     update(value) {
       accept(value);
-      try { storage.setItem("tabbetter-workspace-v1", JSON.stringify(state)); }
+      try {
+        storage.setItem("tabbetter-workspace-v1", JSON.stringify(state));
+        persistent = true;
+      }
       catch { persistent = false; }
       return {...state};
     },
@@ -94,28 +100,34 @@ function syncTutorialSettings() {
   const welcome = $("#tutorial-welcome");
   if (welcome) welcome.hidden = !tutorialController.offer();
 }
-// Keep keyboard navigation in the modal, including browsers that otherwise
-// move focus to browser chrome after the final native-dialog control.
+// Own every plain Tab step: native traversal can skip buttons in WebKit's
+// default keyboard configuration even when those controls accept focus().
 function workspaceDialogKeydown(event) {
-  if (event.key !== "Tab") return;
+  if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey) return;
   const dialog = event.currentTarget;
   const controls = [...dialog.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex="0"]')]
-    .filter(control => control.getClientRects().length && !control.closest("[hidden]"));
-  const first = controls[0], last = controls[controls.length - 1];
-  const current = document.activeElement;
-  if (event.shiftKey && (current === first || !controls.includes(current))) {
-    event.preventDefault(); last?.focus();
-  } else if (!event.shiftKey && (current === last || !controls.includes(current))) {
-    event.preventDefault(); first?.focus();
-  }
+    .filter(control => !control.matches(":disabled") && control.tabIndex >= 0 && control.getClientRects().length && !control.closest("[hidden]"));
+  const index = controls.indexOf(document.activeElement);
+  const next = event.shiftKey
+    ? (index <= 0 ? controls.length - 1 : index - 1)
+    : (index + 1) % controls.length;
+  event.preventDefault();
+  controls[next]?.focus();
 }
 function closeWorkspaceDrawer() {
   const drawer = $("#workspace-drawer");
   if (!drawer?.open) return;
+  const navigation = $("#workspace-navigation");
+  const focused = navigation.contains(document.activeElement) ? document.activeElement : null;
   drawer.close();
-  $("#workspace-sidebar-slot").append($("#workspace-navigation"));
-  $("#workspace-menu").setAttribute("aria-expanded", "false");
-  if ($("#workspace-menu").getClientRects().length) $("#workspace-menu").focus();
+  $("#workspace-sidebar-slot").append(navigation);
+  const menu = $("#workspace-menu");
+  menu.setAttribute("aria-expanded", "false");
+  // A breakpoint change hides Menu. Preserve a focused destination if possible,
+  // otherwise restore the opener or a meaningful visible desktop destination.
+  const target = [focused, menu, navigation.querySelector('[aria-current="page"]'), $("#app")]
+    .find(control => control?.isConnected && control.getClientRects().length && !control.closest("[hidden]"));
+  target?.focus();
 }
 function workspaceRouteChanged() {
   if (!workspaceInitialized) return;
