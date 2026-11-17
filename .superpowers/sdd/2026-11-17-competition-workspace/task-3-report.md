@@ -1,5 +1,7 @@
 # Task 3 implementation and acceptance report
 
+> **Correction:** The final-review appendix below retracts the initial invitation acceptance false positive and records the repaired handoff and explicit-instant policy.
+
 Date: 2026-11-17. Branch: `design/competition-workspace`.
 
 ## Source and boundaries
@@ -136,3 +138,59 @@ The baseline audit's **live** mobile first title was 936.33, below the 900px vie
 5. Browser screenshots are headless/narrow-viewport evidence, not actual mobile hardware, browser-tab chrome, screen-reader operation or user design approval. No new comprehensive contrast audit or calendar-client import was performed. Existing branding/theme/accessibility regressions passed.
 6. **Independent review is pending with the coordinator.** Review Task 3 from `f9d8370` to `ecee2e0`, and the whole workspace against the approved baseline before release. No subagent reviewer was spawned, per instruction.
 7. **Nothing was deployed.** Coordinator must publish only reviewed source, record the prior/new Worker version, verify apex/www assets and real mobile Settings/tutorial/Schedule interactions, recheck public four-slot downloads if available, and distinguish source outages from application failures. No account/login or exhaustive rankings-corpus claim is introduced.
+
+## Final-review follow-up and correction (2026-11-17)
+
+**This appendix supersedes the initial report's invitation-acceptance claim and its unconditional invalid/missing-tournament-zone export policy.** The initial live harness incorrectly treated any nonempty section as success. Its `invitation` route actually rendered **Section not found.** The earlier statement that the invitation workflow passed was a false positive, not an upstream outage. The reviewer independently reproduced it. The earlier successful ICS-byte, timezone-context and identity checks remain separate valid observations.
+
+### Committed repair
+
+- Reviewed prior production: `ecee2e0`, with report-only HEAD `b5de63e`.
+- **Review-fix implementation and test commit: `4877d01ff973f363fcad6474677cc4b34123f98d`.** The complete matrix below ran against these exact production/test files. This appendix is committed separately as documentation.
+- Addressed all three findings in `final-review.md`. No release actions, subagents, dependencies, router aliases or global date-policy changes.
+
+1. **Invitation route and usable handoff:** Schedule now targets the existing `overview` route. The supplemental browser test activates the real link, waits for Schedule DOM to be replaced, rejects `Section not found`, and verifies the actual invitation prose. Returning with the real Schedule tab preserves the unselected state or either chosen interpretation within the same tournament. A separate source-unavailable fixture verifies the honest invitation-unavailable explanation and correct official invitation href, then returns with the choice preserved.
+2. **Known instants without tournament metadata:** Fully explicit Z/numeric-offset schedules now remain exportable when the tournament timezone is absent or invalid. Their known instants are displayed in UTC with an explicit disclosure that tournament timezone metadata is missing/invalid and that UTC is only the display convention. Source metadata is not modified. Offsetless or mixed schedules with unusable tournament-zone metadata remain blocked; no offsetless value is automatically interpreted. The parser's calendar/range/DST protections and whole-export validation remain in force.
+3. **Local harness HTTP500 hygiene:** Both new server callbacks log the exception object server-side and send only fixed `Internal server error` to the HTTP client. Two regression tests execute those actual callbacks with a deliberately failing worker and verify the generic status/body plus retained server-side diagnostics.
+
+### Red-first evidence
+
+Evidence root: **`/Users/yashthakur/.jcode/scratch/task3-review-fix/`**.
+
+- `red-browser.log`: before the production repair, clicking the actual Schedule invitation action failed specifically because the resulting content was `Section not found.`. The test no longer validates the erroneous href as its success criterion.
+- `red-unit.log`: the explicit-only/missing-zone case failed with actual `invalid` versus expected `ready`. Both HTTP500 callback tests failed because the response contained the injected internal diagnostic. These were intended behavior failures, not absent test helpers or syntax errors.
+- The accompanying offsetless/mixed no-guess regression passed before the fix and remains green afterward. It protects the existing conservative behavior while permitting the newly covered fully explicit cases.
+- Focused green run: `node --test tests/schedule.test.mjs tests/schedule-harness.test.mjs` passed **14 tests**. The compiled Chromium schedule test then passed the actual invitation-click and export flows.
+
+### Strengthened public-interface checks
+
+The live harness now captures the real invitation API response in memory and checks **every received paragraph** against rendered Overview prose, including paragraph count. It clicks the actual Schedule invitation link and actual return tab for the unselected, UTC and America/Los_Angeles states in both viewer timezones. It asserts unchanged interpretation and schedule text on return.
+
+The tab loop uses real tournament navigation buttons, waits for the requested active section, and rejects `Section not found` and structured-export-unavailable fallback text. Checks are section-specific: actual invitation paragraphs; Events heading and event-card count against received data; Schools heading and row count; Entries/Judges labeled search controls and visible row counts followed by zero-match searches; published Pairings/Results event/round cards; Statistics heading/control/rendered statistics; Resources heading and links. Counts and flags are recorded, not raw rosters. These are still scoped smoke checks, not exhaustive correctness proofs for every published result/resource.
+
+### Final rerun results
+
+The exact command block in the initial report was rerun with the same installed Playwright environment values. Additionally, the focused unit/harness command above was run. No browser opt-in was omitted.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Full build + opt-in `npm test` | **355 passed, 0 failed, 0 skipped** | `full.log` |
+| Chromium four relevant browser files | **7 passed, 0 failed, 0 skipped** | `cross-engine.log`, Chromium section |
+| Firefox same files | **7 passed, 0 failed, 0 skipped** | `cross-engine.log`, Firefox section |
+| WebKit same files | **7 passed, 0 failed, 0 skipped** | `cross-engine.log`, WebKit section |
+| Original discovery harness, unchanged | Passed | `discovery.log` |
+| Original member harness with `--live`, unchanged | Passed, including 271 member links / 267 shortcuts and official 302 login redirect | `member.log` |
+| Corrected unintercepted public smoke | Passed | `live-final.log` |
+| `npm run check`, `npm run validate`, staged/diff checks | Passed, including after staging the new callback regression file | Task outputs |
+
+All three engines test missing and invalid tournament metadata with Z/Z, numeric/numeric and mixed explicit Z/numeric endpoints. They verify no interpretation selector, enabled real Calendar download, truthful UTC display disclosure, unchanged metadata label and actual downloaded exact UTC instants. Mixed offsetless cases remain blocked. These supplemental cases are not claims that live 41209 lacks a timezone.
+
+### Corrected live evidence
+
+Final corrected run began **2026-11-17T20:49:41.889Z**, with a prior corrected run at approximately 20:48:32Z. Ordinary upstream fetch through the compiled local Worker remained unintercepted. The actual source still returned four offsetless slots and America/Los_Angeles metadata.
+
+The invitation response was HTTP 200 and contained **72 paragraphs**. Six actual invitation-link/return journeys passed: unselected, UTC and America/Los_Angeles interpretation, each in LA and UTC browser contexts. Every journey verified all 72 rendered source paragraphs and preserved its choice and schedule text. The Overview tab was also verified during the section-specific loop. No `Section not found` response is counted as success.
+
+Both explicit interpretations still produced the four expected **1008-byte, four-VEVENT** downloads, with all DTSTART/DTEND values matching the earlier documented arrays, valid UID/DTSTAMP/CRLF checks and viewer-zone-independent schedule displays. Public event/round, member identity/back, directory search and save/reload checks also passed. The explicit-only missing-zone behavior is covered separately by fixtures/unit tests, not misrepresented as live evidence.
+
+Independent scoped re-review remains pending. The source's intended interpretation of offsetless 41209 timestamps is still unknown and remains an explicit user choice. No deployment, authenticated-content access, exhaustive source audit or calendar-client import is claimed.
