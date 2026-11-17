@@ -1009,7 +1009,7 @@ function drawCalendar() {
               t.id +
               '">' +
               esc(t.name) +
-              '</button><div style="font-size:10px;color:var(--muted);margin-top:5px">' +
+              '</button><div style="font-size:0.625rem;color:var(--muted);margin-top:5px">' +
               esc([t.city, t.location].filter(Boolean).join(" · ")) +
               (t.judgeSignup ? " · Seeking judges" : "") +
               '</div></td><td class="hide-medium">' +
@@ -1555,7 +1555,7 @@ function renderDetail() {
   } else if (sub === "statistics") {
     reconcileRoundFilters();
     target.innerHTML =
-      '<h2 style="margin-bottom:6px">Published statistics</h2><p class="sub" style="font-size:12px;margin-bottom:18px">Counts come from published ballots only. Rounds that are unpublished, in progress or restricted are not included.</p><div class="round-filters"><label for="stat-event">Event<select id="stat-event">' +
+      '<h2 style="margin-bottom:6px">Published statistics</h2><p class="sub" style="font-size:0.75rem;margin-bottom:18px">Counts come from published ballots only. Rounds that are unpublished, in progress or restricted are not included.</p><div class="round-filters"><label for="stat-event">Event<select id="stat-event">' +
       opts(d.events.map((e) => ({ value: e.id, label: e.name })), roundEvent, "All events") +
       '</select></label><label for="stat-round">Round<select id="stat-round" ' +
       (!roundEvent ? "disabled" : "") +
@@ -1586,7 +1586,7 @@ function renderDetail() {
   } else if (sub === "schedule") {
     const times = d.timeslots;
     target.innerHTML =
-      '<div class="switch-row"><h2>Published schedule</h2><button class="btn" id="ics">↓ Calendar</button></div><p class="sub" style="font-size:12px;margin-bottom:18px">Times shown in ' +
+      '<div class="switch-row"><h2>Published schedule</h2><button class="btn" id="ics">↓ Calendar</button></div><p class="sub" style="font-size:0.75rem;margin-bottom:18px">Times shown in ' +
       esc(d.timezone) +
       ". Refer to the invitation for event-specific start times.</p>" +
       (times.length
@@ -2013,27 +2013,35 @@ function renderEntryBallots(entry) {
         (scores ? '<small>' + esc(scores) + '</small>' : '') + '</li>';
     }).join('') + '</ul>';
 }
+let themeController;
 function initTheme() {
-  const choices = ["system", "light", "dark", "midnight"];
-  let preference = "light";
-  try {
-    const stored = localStorage.getItem("tabbetter-theme");
-    if (choices.includes(stored)) preference = stored;
-  } catch { /* Storage can be unavailable in private browsing. */ }
-  const media = window.matchMedia("(prefers-color-scheme: dark)");
-  const select = $("#theme");
-  const apply = () => {
-    document.documentElement.dataset.theme = preference === "system"
-      ? (media.matches ? "dark" : "light") : preference;
-    select.value = preference;
-  };
-  select.addEventListener("change", () => {
-    preference = choices.includes(select.value) ? select.value : "system";
-    try { localStorage.setItem("tabbetter-theme", preference); } catch { /* Keep session choice. */ }
-    apply();
-  });
-  media.addEventListener("change", apply);
-  apply();
+  if (!themeController) {
+    const choices = ["system", "light", "dark", "midnight"];
+    let preference = "light";
+    try {
+      const stored = localStorage.getItem("tabbetter-theme");
+      if (choices.includes(stored)) preference = stored;
+    } catch { /* Storage can be unavailable in private browsing. */ }
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      document.documentElement.dataset.theme = preference === "system"
+        ? (media.matches ? "dark" : "light") : preference;
+      const select = $("#theme");
+      if (select) select.value = preference;
+    };
+    themeController = {apply, bind(select) {
+      if (!select || select === this.select) return;
+      this.select = select;
+      select.addEventListener("change", () => {
+        preference = choices.includes(select.value) ? select.value : "light";
+        try { localStorage.setItem("tabbetter-theme", preference); } catch { /* Keep session choice. */ }
+        apply();
+      });
+    }};
+    media.addEventListener("change", apply);
+  }
+  themeController.bind($("#theme"));
+  themeController.apply();
 }
 function reconcileRoundFilters() {
   if (!tournament.events.some((e) => e.id === roundEvent)) roundEvent = "";
@@ -2241,7 +2249,7 @@ function toolPage(name) {
   let content = "";
   if (["results", "judging"].includes(name)) {
     content =
-      '<div class="card" style="margin-top:24px"><h2>Open a tournament workspace</h2><p class="sub" style="font-size:12px;margin:12px 0 20px">Paste its Tabroom link, then use ' +
+      '<div class="card" style="margin-top:24px"><h2>Open a tournament workspace</h2><p class="sub" style="font-size:0.75rem;margin:12px 0 20px">Paste its Tabroom link, then use ' +
       (name === "results"
         ? "Results"
         : "Pairings to search for your judge name") +
@@ -2262,7 +2270,7 @@ function toolPage(name) {
   }
   if (name === "paradigms")
     content =
-      '<div class="card" style="margin-top:24px"><h2>Judge paradigm directory</h2><p class="sub" style="font-size:13px;margin:14px 0 20px">Read judges’ preferences and experience before the round.</p>' +
+      '<div class="card" style="margin-top:24px"><h2>Judge paradigm directory</h2><p class="sub" style="font-size:0.8125rem;margin:14px 0 20px">Read judges’ preferences and experience before the round.</p>' +
       external(
         official + "/index/paradigm.mhtml",
         "Browse paradigms on Tabroom",
@@ -2376,9 +2384,10 @@ async function renderRoute() {
   if (typeof unmountDiscoveryWorkspace === "function") unmountDiscoveryWorkspace();
   routeToken++;
   const r = route();
-  document.querySelectorAll(".more-nav[open]").forEach(menu => menu.removeAttribute("open"));
+  if (typeof workspaceRouteChanged === "function") workspaceRouteChanged();
   $("#crumb").textContent =
     {
+      settings: "Settings",
       discover: "Tournaments",
       saved: "Saved tournaments",
       circuits: "Circuits",
@@ -2402,7 +2411,9 @@ async function renderRoute() {
   document.title =
     (r.name === "tournament" && tournament ? tournament.name + " · " : "") +
     "TabBetter";
-  if (r.name === "discover" || r.name === "saved") {
+  if (r.name === "settings") {
+    if (typeof renderWorkspaceSettings === "function") renderWorkspaceSettings();
+  } else if (r.name === "discover" || r.name === "saved") {
     if (calendar) calendarShell();
     else await loadCalendar();
   } else if (r.name === "circuits") await circuitsPage();

@@ -83,7 +83,7 @@ test('every existing CSS and inline color uses theme tokens', () => {
   assert.ok(css.includes('/* Components */'));
   assert.doesNotMatch(components, /#[\da-f]{3,8}\b|:\s*(?:white|black)\b|rgba?\(/i);
   assert.doesNotMatch(source, /(?:color|background):\s*#[\da-f]/i);
-  assert.match(fs.readFileSync('web/index.html', 'utf8'), /<label[^>]*for="theme"/);
+  assert.match(fs.readFileSync('web/workspace.js', 'utf8'), /<label[^>]*for="theme"/);
 });
 test('theme text and status pairs meet WCAG AA normal text contrast', () => {
   const css = fs.readFileSync('web/styles.css', 'utf8');

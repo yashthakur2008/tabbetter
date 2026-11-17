@@ -373,3 +373,12 @@ test('final R2 successful HTTP unavailable metadata has explicit bounded recover
   assert.equal(requests.length,4,'an available empty offering is not treated as an unavailable fetch');
   assert.equal(a.node('#discovery-retry-details').hidden,true);
 });
+
+test('workspace reduced-motion preference suppresses discovery Web Animations, not just CSS', () => {
+  const a = harness();
+  a.run(`location.hash='#discover'; discoveryState.root=document.querySelector('#app'); document.documentElement.dataset.motion='reduce';`);
+  let animations=0;
+  a.node('#discovery-results').animate=()=>{animations++;return {cancel(){}};};
+  a.run('discoveryDrawResults()');
+  assert.equal(animations,0,'manual reduced motion must suppress result fades');
+});

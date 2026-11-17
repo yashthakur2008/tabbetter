@@ -133,7 +133,7 @@ function discoveryDrawResults() {
   $('#discovery-retry-details').hidden = !discoveryBase().some(t => ['failed','unavailable'].includes(discoveryState.metadata[t.id]?.status));
   $('#discovery-retry-details').disabled = discoveryState.metadataBusy || discoveryState.calendarBusy;
   discoveryState.animation?.cancel();
-  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && region.animate) discoveryState.animation = region.animate([{opacity:0.65},{opacity:1}], {duration:180});
+  if (document.documentElement.dataset.motion !== 'reduce' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && region.animate) discoveryState.animation = region.animate([{opacity:0.65},{opacity:1}], {duration:180});
 }
 function discoveryChips() {
   const chips = [];
@@ -410,6 +410,7 @@ function discoveryKeydown(event) {
   if (!discoveryActive() || event.isComposing) return;
   const active = document.activeElement;
   const dialog = $('#discovery-preview');
+  if (document.querySelector('dialog[open]')?.open && !dialog.open) return;
   if (event.key === 'Tab' && dialog.open) {
     // Native modality makes the page inert, but browsers can still move Tab
     // into their chrome after the last control. Keep the preview's cycle local.

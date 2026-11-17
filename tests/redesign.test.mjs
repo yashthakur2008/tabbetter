@@ -4,13 +4,14 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 const html = fs.readFileSync('web/index.html','utf8');
 const source = fs.readFileSync('web/app.js','utf8');
-test('horizontal navigation keeps all existing destinations and theme selection', () => {
+test('workspace navigation keeps existing destinations and centralizes settings', () => {
   assert.match(html, /class="site-header"/);
-  assert.doesNotMatch(html, /class="sidebar"/);
-  for (const name of ['discover','saved','circuits','results','judging','paradigms','account','help'])
+  assert.match(html, /id="workspace-navigation"/);
+  for (const name of ['discover','saved','circuits','results','judging','paradigms','account','help','settings'])
     assert.equal((html.match(new RegExp('data-nav="'+name+'"','g')) || []).length, 1);
-  assert.match(html, /<details class="more-nav">/);
-  assert.match(html, /id="theme"/);
+  assert.doesNotMatch(html, /<details class="more-nav">/);
+  assert.doesNotMatch(html, /id="theme"/);
+  assert.match(fs.readFileSync("web/workspace.js", "utf8"), /id="theme"/);
 });
 test('hero is text-only with escaped copy and no sample result claims', () => {
   const context = vm.createContext({ document:{querySelector:()=>null}, localStorage:{getItem:()=>null} });

@@ -1970,26 +1970,13 @@ th { font-size: 11px; }
 /* Shared navigation and page frame. Discovery components live in discovery.css. */
 body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
 main { margin: 0; }
-.site-header { position: relative; z-index: 30; background: var(--canvas); border: 0; }
-.site-header-inner { max-width: 1264px; margin: auto; padding: 14px 32px; min-height: 72px; display: flex; align-items: center; gap: 32px; }
+.site-header { position: sticky; top: 0; z-index: 30; background: var(--canvas); border: 0; }
+.site-header-inner { padding: 14px 24px; min-height: 0; height: 100%; display: flex; align-items: center; gap: 24px; }
 .site-header .brand { display: flex; gap: 0; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -1.1px; white-space: nowrap; }
 .site-header .mark { margin-right: 10px; width: 34px; height: 34px; border-radius: 8px; background: var(--accent); color: var(--button-ink); font-size: 30px; }
 .brand-period { color: var(--accent); }
-.primary-nav { display: flex; align-items: center; gap: 8px; flex: 1; }
-.primary-nav > button, .more-nav summary { border: 0; background: none; padding: 10px 12px; min-height: 44px; border-radius: 8px; color: var(--muted); font-size: 14px; font-weight: 550; white-space: nowrap; cursor: pointer; }
-.primary-nav > button.active { color: var(--accent); background: var(--accent-bg); }
-.primary-nav > button:hover, .more-nav summary:hover { color: var(--text); }
-.more-nav { position: relative; }
-.more-nav summary { list-style: none; }
-.more-nav summary::-webkit-details-marker { display: none; }
-.more-menu { position: absolute; top: 100%; right: 0; min-width: 230px; background: var(--surface); border: 0; padding: 8px; border-radius: 10px; box-shadow: 0 12px 32px var(--shadow); }
-.more-menu button, .more-menu a { display: block; width: 100%; text-align: left; padding: 12px; background: transparent; color: var(--text); border: 0; border-radius: 5px; font-size: 14px; }
-.more-menu button:hover, .more-menu a:hover, .more-menu .active { background: var(--accent-bg); color: var(--accent); }
-.header-actions { display: flex; align-items: center; gap: 14px; }
-.header-actions #theme { width: 95px; border: 0; background: transparent; }
 .btn.primary-action, .btn.dark { background: var(--accent-fill); color: var(--button-ink); border-color: transparent; font-weight: 650; }
 .btn.primary-action:hover, .btn.dark:hover:not(:disabled) { background: var(--accent); color: var(--button-ink); }
-.header-actions .btn { padding: 13px 20px; white-space: nowrap; }
 .content { max-width: 1264px; padding: 40px 32px 48px; margin: auto; }
 .switch-row h2 { font-size: 25px; letter-spacing: -.7px; }
 .card { border-color: var(--border); box-shadow: none; border-radius: 9px; }
@@ -2018,21 +2005,12 @@ td { border-color: var(--border); }
 .member-card h2 { font-size: clamp(26px,3vw,38px); letter-spacing: -1px; }
 .footer { margin-top: 48px; border: 0; padding-top: 24px; gap: 24px; flex-wrap: wrap; }
 @media (max-width: 1050px) {
-  .site-header-inner { flex-wrap: wrap; gap: 12px 24px; padding: 14px 24px; }
-  .header-actions { margin-left: auto; }
-  .primary-nav { order: 3; flex-basis: 100%; gap: 26px; }
-  .more-menu { left: 0; right: auto; }
+
   .content { padding: 32px 24px 40px; }
 }
 @media (max-width: 700px) {
-  .site-header-inner { padding: 16px 16px 8px; }
+  .site-header-inner { padding: 12px 16px; }
   .site-header .brand { font-size: 23px; }
-  .primary-nav { gap: 0; justify-content: space-between; }
-  .primary-nav > button, .more-nav summary { font-size: 14px; min-height: 44px; }
-  .more-menu { left: auto; right: 0; }
-  .header-actions { gap: 4px; }
-  .header-actions #theme { width: 75px; padding-inline: 4px; }
-  .header-actions .btn { display: none; }
   .content { padding: 24px 16px 32px; }
   .switch-row h2 { font-size: 22px; }
   .tournament-resources { grid-template-columns: 1fr; gap: 24px; }
