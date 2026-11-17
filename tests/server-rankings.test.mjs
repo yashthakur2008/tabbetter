@@ -8,6 +8,7 @@ const serverSource = fs.readFileSync(new URL('../src/server.mjs', import.meta.ur
 function server(corpus) {
   const context = vm.createContext({
     rankingsCorpus: corpus, hydrateCorpus, Response, Request, URL, URLSearchParams,
+    brandAssets: {}, // Compiler-provided static asset map, irrelevant to ranking data.
     page: '<!doctype html><title>Test</title>',
   });
   vm.runInContext(serverSource.replace('export default {', 'globalThis.handler = {'), context);

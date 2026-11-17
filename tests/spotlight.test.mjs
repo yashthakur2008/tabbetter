@@ -12,7 +12,7 @@ const ui = fs.readFileSync('web/discovery.js', 'utf8');
 test('the ambient glow and pointer spotlight are removed at source', () => {
   assert.doesNotMatch(source, /tileSpotlight|pointermove|--mx|--my/);
   assert.doesNotMatch(css, /body::before|\.tile::before|--glow:|--hairline:|Signal: a darker/);
-  assert.doesNotMatch(discovery, /gradient\(|backdrop-filter|border-(?:top|bottom):/);
+  assert.doesNotMatch(discovery, /gradient\(|backdrop-filter/);
 });
 
 test('the shared header uses an opaque canvas and a filled current navigation state', () => {
@@ -23,9 +23,10 @@ test('the shared header uses an opaque canvas and a filled current navigation st
   assert.match(source, /setAttribute\("aria-current", "page"\)/);
 });
 
-test('discovery rows own generous borderless composition without reviving old tile styles', () => {
-  assert.match(discovery, /\.discovery-row\s*\{[^}]*padding:\s*24px/);
+test('discovery rows use compact aligned separators without reviving old tile styles', () => {
+  assert.match(discovery, /\.discovery-row\s*\{[^}]*padding:\s*12px 16px/);
   assert.match(discovery, /\.discovery-row\s*\{[^}]*minmax\(0,1fr\)/);
+  assert.match(discovery, /\.discovery-row\s*\{[^}]*border-bottom: 1px solid var\(--border\)/);
   assert.doesNotMatch(css, /\.tile(?:\s|:|\{)|\.hero-directory|\.directory-shortcuts/);
   assert.doesNotMatch(discovery, /overflow-x:\s*hidden/);
 });

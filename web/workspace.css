@@ -26,10 +26,10 @@ main { grid-column: 2; margin: 0; }
 .workspace-settings select, .workspace-settings #theme { display: block; width: 100%; max-width: 24rem; font-size: 1rem; }
 .workspace-settings .workspace-switch { display: flex; align-items: center; gap: 12px; }
 .workspace-switch input { width: 1.25rem; height: 1.25rem; flex: 0 0 auto; }
-#tutorial-welcome { margin: 24px 32px 0; padding: 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
-#tutorial-welcome h2 { font-size: 1.125rem; margin: 0; }
-#tutorial-welcome p { margin: 10px 0 16px; }
-#tutorial-welcome .btn { margin: 4px; }
+#tutorial-welcome { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: 16px 32px 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+#tutorial-welcome h2 { font-size: 1rem; margin: 0; flex-basis: 100%; }
+#tutorial-welcome p { margin: 0; flex: 1 1 280px; font-size: .875rem; line-height: 1.5; }
+#tutorial-welcome .btn { margin: 0; min-height: 44px; }
 #tutorial-dialog { width: min(36rem, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px; color: var(--text); background: var(--surface); }
 #tutorial-dialog h2 { font-size: 1.5rem; line-height: 1.3; }
 #tutorial-dialog p { line-height: 1.6; }
@@ -58,7 +58,7 @@ main { grid-column: 2; margin: 0; }
   .site-header-inner { flex-wrap: wrap; gap: 10px; }
   #crumb { order: 3; flex-basis: 100%; }
   main { margin-left: 0; }
-  #tutorial-welcome { margin: 16px; }
+  #tutorial-welcome { margin: 16px 16px 0; }
 }
 @media print {
   body { display: block; }

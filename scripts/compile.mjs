@@ -46,7 +46,11 @@ const page = fs
   );
 if (page.includes('href="/styles.css"') || page.includes('src="/app.js"'))
   throw Error("Asset embedding failed");
-const logo = fs.readFileSync("assets/logo.png").toString("base64");
+const brandAssets = Object.fromEntries([
+  ["mark-v2.svg", "image/svg+xml"], ["mark-mono-v2.svg", "image/svg+xml"],
+  ["favicon-16-v2.png", "image/png"], ["favicon-32-v2.png", "image/png"],
+  ["touch-icon-v2.png", "image/png"], ["favicon-v2.ico", "image/x-icon"],
+].map(([name, type]) => ["/assets/" + name, { type, data: fs.readFileSync("assets/" + name).toString("base64") }]));
 // The rankings corpus is embedded only when it has been imported locally and
 // its redistribution is cleared. Its absence is a supported build state.
 const corpusPath = "build/rankings-corpus.json";
@@ -58,8 +62,8 @@ fs.writeFileSync(
   "worker/index.js",
   "const page = " +
     JSON.stringify(page) +
-    ";\nconst logo = " +
-    JSON.stringify(logo) +
+    ";\nconst brandAssets = " +
+    JSON.stringify(brandAssets) +
     ";\nconst rankingsCorpus = " +
     corpus +
     ";\n" +

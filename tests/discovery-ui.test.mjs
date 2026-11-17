@@ -147,7 +147,7 @@ test('failed metadata has an explicit bounded retry, not a dead-end checked stat
   await a.run('discoveryCheckNext(true)');
   assert.match(request || '', /ids=1$/);
   assert.equal(a.run('discoveryState.metadata[1].status'), 'available');
-  assert.match(a.run('discoveryShellHTML()'), /Retry failed checks/);
+  assert.match(a.run('discoveryShellHTML()'), /Retry details/);
 });
 
 test('preview remains available when selected events change and restores replacement trigger', () => {
@@ -344,7 +344,7 @@ test('final R2 successful HTTP unavailable metadata has explicit bounded recover
   assert.equal(a.run('discoveryState.metadata[1].status'),'unavailable');
   assert.equal(upstreamCalls,28);
   assert.equal(a.node('#discovery-retry-details').hidden,false,'HTTP 200 unavailable must expose recovery');
-  assert.match(a.node('#discovery-coverage').textContent,/1 minute/);
+  assert.match(a.run('discoveryShellHTML()'),/id="discovery-coverage-help"[\s\S]*1 minute/);
   await a.run('discoveryCheckNext(true)');
   assert.equal(requests.length,2,'no requests during negative cache lifetime');
   a.run(`location.hash='#about'; unmountDiscoveryWorkspace(); location.hash='#discover'; renderDiscoveryWorkspace(); discoveryClearAll();`);
@@ -381,4 +381,22 @@ test('workspace reduced-motion preference suppresses discovery Web Animations, n
   a.node('#discovery-results').animate=()=>{animations++;return {cancel(){}};};
   a.run('discoveryDrawResults()');
   assert.equal(animations,0,'manual reduced motion must suppress result fades');
+});
+
+test('directory rows have labeled fields and deduplicate online location without losing modes', () => {
+  const a=harness();
+  const row=a.run(`discoveryRowHTML(discoverTournaments([{id:'3',name:'Online Speech',city:'Online',modes:['Online'],dates:'Nov 20',registration:'Due tomorrow'}],{})[0])`);
+  for(const label of ['Date','Location / format','Events','Registration']) assert.ok(row.includes('>'+label+'</span>'),label);
+  assert.doesNotMatch(row,/Online · Online/);
+  assert.match(row,/data-discovery-row="3"/);
+});
+test('coverage keeps a concise warning and exposes retry explanation in a disclosure', () => {
+  const a=harness();
+  a.run(`discoveryState.metadata={'1':{status:'unavailable'}}`);
+  assert.match(a.run('discoveryCoverage()'), /Matches may be incomplete/);
+  assert.ok(a.run('discoveryCoverage()').length<140);
+  const html=a.run('discoveryShellHTML()');
+  assert.match(html, /<details[^>]*id="discovery-coverage-help"/);
+  assert.match(html,/1 minute/);
+  assert.match(html,/id="discovery-retry-details"/);
 });

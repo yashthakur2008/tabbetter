@@ -216,3 +216,22 @@ test('frontend versions API URLs to avoid browser-cached old export shapes', () 
 });
 
 test('fresh visitors default light even with a dark OS', () => { const a = app(null, true); vm.runInContext('initTheme()', a.context); assert.equal(a.document.documentElement.dataset.theme, 'light'); });
+
+test('tournament navigation exposes all six tasks and separately labels additional sections', () => {
+  const a=app();
+  assert.equal(vm.runInContext('typeof tournamentNavigationHTML',a.context),'function');
+  const html=vm.runInContext('tournamentNavigationHTML("pairings")',a.context);
+  const primary=html.split('aria-label="Additional tournament sections"')[0];
+  const labels=[...primary.matchAll(/data-sub="([^"]+)"/g)].map(m=>m[1]);
+  assert.deepEqual(labels,['overview','schedule','pairings','entries','judges','results']);
+  assert.match(primary,/>Overview<\/button>/);
+  assert.match(primary,/aria-current="page"[^>]*data-sub="pairings"/);
+  for(const section of ['events','schools','statistics','resources']) assert.match(html,new RegExp('data-sub="'+section+'"'));
+});
+test('unavailable rankings explains no login requirement and offers real next actions', () => {
+  const a=app();vm.runInContext('renderCompetitorProfile({available:false})',a.context);
+  const html=a.node('#app').innerHTML;
+  assert.match(html,/not a sign-in issue/);
+  assert.match(html,/href="#discover"/);
+  assert.match(html,/href="#help"/);
+});

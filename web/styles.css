@@ -355,7 +355,6 @@ a {
   background: none;
   box-shadow: none;
 }
-.mark svg { width: 100%; height: 100%; display: block; }
 .tiny {
   font-size: 10px;
   letter-spacing: 1.8px;
@@ -1510,9 +1509,9 @@ td .name-btn {
   font-size: 14px !important;
 }
 .about-brand {
-  width: 240px;
+  width: 64px;
   max-width: 100%;
-  height: 85px;
+  height: 64px;
   object-fit: contain;
 }
 .switch-row {
@@ -1973,11 +1972,11 @@ main { margin: 0; }
 .site-header { position: sticky; top: 0; z-index: 30; background: var(--canvas); border: 0; }
 .site-header-inner { padding: 14px 24px; min-height: 0; height: 100%; display: flex; align-items: center; gap: 24px; }
 .site-header .brand { display: flex; gap: 0; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -1.1px; white-space: nowrap; }
-.site-header .mark { margin-right: 10px; width: 34px; height: 34px; border-radius: 8px; background: var(--accent); color: var(--button-ink); font-size: 30px; }
+.site-header .mark { margin-right: 10px; width: 34px; height: 34px; border-radius: 0; background: none; flex-shrink: 0; }
 .brand-period { color: var(--accent); }
 .btn.primary-action, .btn.dark { background: var(--accent-fill); color: var(--button-ink); border-color: transparent; font-weight: 650; }
 .btn.primary-action:hover, .btn.dark:hover:not(:disabled) { background: var(--accent); color: var(--button-ink); }
-.content { max-width: 1264px; padding: 40px 32px 48px; margin: auto; }
+.content { max-width: 1264px; padding: 24px 32px 48px; margin: auto; }
 .switch-row h2 { font-size: 25px; letter-spacing: -.7px; }
 .card { border-color: var(--border); box-shadow: none; border-radius: 9px; }
 .table-wrap { border-color: var(--border); background: var(--surface); }
@@ -1987,8 +1986,10 @@ td { border-color: var(--border); }
 .detail-header { margin-bottom: 24px; }
 .detail-header h1 { font-size: clamp(28px, 3vw, 42px); letter-spacing: -1.3px; line-height: 1.18; }
 .detail-header .eyebrow { color: var(--accent); }
-.subnav { gap: 22px; margin-bottom: 28px; overflow-x: auto; flex-wrap: nowrap; }
-.subnav button { padding: 15px 0; font-size: 14px; flex-shrink: 0; }
+.subnav { gap: 4px 16px; margin: 12px 0; overflow: visible; flex-wrap: wrap; }
+.subnav button { padding: 10px 8px; min-height: 44px; font-size: 14px; flex-shrink: 0; white-space: normal; }
+.tournament-additional { align-items: center; margin-bottom: 24px; }
+.tournament-additional > span { color: var(--muted); font-size: 12px; }
 .subnav button.active { border-bottom-color: var(--accent); }
 .count-row { gap: 0; border-bottom: 1px solid var(--border); padding-bottom: 22px; margin-top: 0; }
 .count-row > span { background: none; border: 0; padding: 8px 32px 8px 0; border-radius: 0; }
@@ -2015,7 +2016,7 @@ td { border-color: var(--border); }
   .switch-row h2 { font-size: 22px; }
   .tournament-resources { grid-template-columns: 1fr; gap: 24px; }
   .card.prose, .round-card { padding: 20px; }
-  .subnav { gap: 20px; }
+  .subnav { gap: 4px 8px; }
   .toast { bottom: 24px; }
 }
 @media print {

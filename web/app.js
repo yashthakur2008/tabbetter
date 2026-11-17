@@ -343,7 +343,7 @@ function renderCompetitorProfile(data) {
     $("#app").innerHTML =
       '<div class="empty-note"><h3>Historical rankings unavailable</h3><p>' +
       esc(data.reason || "Historical rankings are not included in this build.") +
-      "</p></div>" +
+      '</p><p>This is not a sign-in issue. Historical rankings require an available, verified source and redistribution permission. Signing in will not unlock them here.</p><p><a href="#discover">Find tournaments and published results</a> · <a href="#help">See available tools and limitations</a></p></div>' +
       footer;
     return;
   }
@@ -1352,24 +1352,23 @@ function renderInvitationParagraph(text, segments) {
     return label;
   }).join("") + "</p>";
 }
+function tournamentNavigationHTML(sub) {
+  const buttons = items => items.map(([key, name]) =>
+    '<button class="' + (sub === key ? 'active' : '') + '"' +
+    (sub === key ? ' aria-current="page"' : '') + ' data-sub="' + key + '">' + name + '</button>').join('');
+  return '<nav class="subnav tournament-tasks" aria-label="Tournament sections">' + buttons([
+    ['overview', 'Overview'], ['schedule', 'Schedule'], ['pairings', 'Pairings'],
+    ['entries', 'Entries'], ['judges', 'Judges'], ['results', 'Results'],
+  ]) + '</nav><nav class="subnav tournament-additional" aria-label="Additional tournament sections"><span>More tournament information</span>' + buttons([
+    ['events', 'Events'], ['schools', 'Schools'], ['statistics', 'Statistics'], ['resources', 'Resources'],
+  ]) + '</nav>';
+}
 function renderDetail() {
   const { id, sub, event } = route();
   if (sub === "entries" && event) detailEvent = event;
   const d = tournament,
     inv = invitation,
     t = d || inv;
-  const tabs = [
-    ["overview", "Invitation"],
-    ["events", "Events"],
-    ["entries", "Entries"],
-    ["schools", "Schools"],
-    ["judges", "Judges"],
-    ["pairings", "Pairings"],
-    ["results", "Results"],
-    ["statistics", "Statistics"],
-    ["schedule", "Schedule"],
-    ["resources", "Resources"],
-  ];
   $("#app").innerHTML =
     '<div class="detail-header"><a href="#discover" class="smalltext">← All tournaments</a><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-top:20px"><div><div class="eyebrow">TOURNAMENT WORKSPACE</div><h1>' +
     esc(t.name) +
@@ -1380,20 +1379,8 @@ function renderDetail() {
       : "") +
     '</div></div><button class="btn" id="save-detail">' +
     (isSaved(id) ? "★ Saved" : "☆ Save") +
-    '</button></div></div><nav class="subnav" aria-label="Tournament sections">' +
-    tabs
-      .map(
-        ([key, name]) =>
-          '<button class="' +
-          (sub === key ? "active" : "") +
-          '" data-sub="' +
-          key +
-          '">' +
-          name +
-          "</button>",
-      )
-      .join("") +
-    '</nav><div class="detail-layout"><section id="detail-content"></section><aside class="aside tournament-resources"><div class="card sidecard"><h3>Official tournament</h3>' +
+    '</button></div></div>' + tournamentNavigationHTML(sub) +
+    '<div class="detail-layout"><section id="detail-content"></section><aside class="aside tournament-resources"><div class="card sidecard"><h3>Official tournament</h3>' +
     external(href(id), "Invitation", "linkrow") +
     external(href(id, "fields"), "Entry lists", "linkrow") +
     external(href(id, "judges"), "Judge lists", "linkrow") +
@@ -2363,7 +2350,7 @@ function toolPage(name) {
       "</div>";
   if (name === "about")
     content =
-      '<div class="card prose" style="margin-top:24px"><img class="about-brand" src="/logo.png" alt="TabBetter"><h2>Made for the moments between rounds.</h2><p><strong>Yash Thakur — Co-founder</strong></p><p style="margin-top:15px">Discover tournaments, save your circuit’s calendar, browse entries and judges, and read published pairings without losing your place.</p><p>TabBetter uses public Tabroom pages and public JSON exports. Every data view shows its source and retrieval time. Availability depends on the tournament’s publication settings and Tabroom access.</p><p>This is an early build, not complete feature parity. Account actions, ballot submission, paradigms and tournament administration open on the official site. Automatic assignment-change notifications are not connected.</p><h2>Source & acknowledgments</h2><p>Tabroom is developed by the National Speech & Debate Association. Its code and schema helped us understand public data relationships. TabBetter’s interface and adapters are independently implemented.</p>' +
+      '<div class="card prose" style="margin-top:24px"><img class="about-brand" src="/assets/mark-v2.svg" alt="" width="64" height="64"><h2>Made for the moments between rounds.</h2><p><strong>Yash Thakur — Co-founder</strong></p><p style="margin-top:15px">Discover tournaments, save your circuit’s calendar, browse entries and judges, and read published pairings without losing your place.</p><p>TabBetter uses public Tabroom pages and public JSON exports. Every data view shows its source and retrieval time. Availability depends on the tournament’s publication settings and Tabroom access.</p><p>This is an early build, not complete feature parity. Account actions, ballot submission, paradigms and tournament administration open on the official site. Automatic assignment-change notifications are not connected.</p><h2>Source & acknowledgments</h2><p>Tabroom is developed by the National Speech & Debate Association. Its code and schema helped us understand public data relationships. TabBetter’s interface and adapters are independently implemented.</p>' +
       external("https://github.com/speechanddebate/tabroom", "Legacy source") +
       " " +
       external(
