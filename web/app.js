@@ -1295,6 +1295,7 @@ async function loadTournament(id, { background = false } = {}) {
     return;
   }
   if (!background) loading();
+  scheduleChoice.enter(id);
   if (lastId !== id) {
     detailFilter = "";
     detailEvent = "";
@@ -1571,28 +1572,7 @@ function renderDetail() {
       ? renderMemberRecord(kind, rest.join(":"))
       : '<div class="card empty">Record not found.</div>';
   } else if (sub === "schedule") {
-    const times = d.timeslots;
-    target.innerHTML =
-      '<div class="switch-row"><h2>Published schedule</h2><button class="btn" id="ics">↓ Calendar</button></div><p class="sub" style="font-size:0.75rem;margin-bottom:18px">Times shown in ' +
-      esc(d.timezone) +
-      ". Refer to the invitation for event-specific start times.</p>" +
-      (times.length
-        ? '<div class="card schedule">' +
-          times
-            .map(
-              (t) =>
-                '<div class="schedule-row"><span class="dot"></span><div><strong>' +
-                esc(t.name) +
-                "</strong><small>" +
-                esc(formatDate(t.start, d.timezone)) +
-                " – " +
-                esc(formatDate(t.end, d.timezone)) +
-                "</small></div></div>",
-            )
-            .join("") +
-          "</div>"
-        : '<div class="card empty">No structured schedule has been published. Check the invitation.</div>');
-    $("#ics").onclick = exportICS;
+    renderSchedule(target, d);
   } else if (sub === "resources") {
     const links = (inv?.links || []).filter(
       (l) => !l.url.includes("/user/login"),
@@ -2160,50 +2140,6 @@ function drawRounds(sub) {
     $("#round-list").innerHTML += renderStandings();
     revealCards($("#round-list"), ".round-card", "results:" + d.id);
   }
-}
-function exportICS() {
-  const d = tournament;
-  const stamp = (s) =>
-    s.replace(/[-: ]/g, "").replace(/^(\d{8})(\d{6})$/, "$1T$2") + "Z";
-  const safe = (s) =>
-    String(s || "")
-      .replace(/\\/g, "\\\\")
-      .replace(/\r?\n/g, "\\n")
-      .replace(/,/g, "\\,")
-      .replace(/;/g, "\\;");
-  const events = d.timeslots.filter(
-    (t) =>
-      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(t.start) &&
-      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(t.end),
-  );
-  if (!events.length) {
-    toast("No structured schedule is available to export.");
-    return;
-  }
-  download(
-    [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//TabBetter//Schedule//EN",
-      ...events.flatMap((t, i) => [
-        "BEGIN:VEVENT",
-        "UID:" + d.id + "-" + i + "@tabbetter",
-        "DTSTAMP:" +
-          new Date()
-            .toISOString()
-            .replace(/[-:]/g, "")
-            .replace(/\.\d{3}/, ""),
-        "DTSTART:" + stamp(t.start),
-        "DTEND:" + stamp(t.end),
-        "SUMMARY:" + safe(d.name + " — " + t.name),
-        "URL:" + href(d.id),
-        "END:VEVENT",
-      ]),
-      "END:VCALENDAR",
-    ].join("\r\n"),
-    "tabbetter-" + d.id + ".ics",
-    "text/calendar",
-  );
 }
 function toolPage(name) {
   const titles = {

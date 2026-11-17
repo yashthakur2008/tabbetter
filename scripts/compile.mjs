@@ -16,6 +16,7 @@ const discoveryApiSource = fs.readFileSync("src/discovery-api.mjs", "utf8")
 const discoveryScript = fs.existsSync("web/discovery.js") ? fs.readFileSync("web/discovery.js", "utf8") : "";
 const discoveryStyles = fs.existsSync("web/discovery.css") ? fs.readFileSync("web/discovery.css", "utf8") : "";
 const workspaceScript = fs.readFileSync("web/workspace.js", "utf8");
+const scheduleScript = fs.readFileSync("web/schedule.js", "utf8");
 const tutorialScript = fs.readFileSync("web/tutorial.js", "utf8");
 const workspaceStyles = fs.readFileSync("web/workspace.css", "utf8");
 // Normalize legacy fixed text sizes to rem without changing default geometry.
@@ -27,7 +28,7 @@ function scalableText(css) {
 const styles = fs.readFileSync("web/styles.css", "utf8");
 const script = fs.readFileSync("web/app.js", "utf8");
 if (
-  [script, discoverySource, discoveryScript, workspaceScript, tutorialScript].some(s => /<\/script/i.test(s)) ||
+  [script, discoverySource, discoveryScript, workspaceScript, tutorialScript, scheduleScript].some(s => /<\/script/i.test(s)) ||
   [styles, discoveryStyles, workspaceStyles].some(s => /<\/style/i.test(s))
 )
   throw Error("Unsafe closing tag in embedded asset");
@@ -40,7 +41,7 @@ const page = fs
   .replace(
     /<script\s+src="\/app.js"\s+defer><\/script>/,
     // Keep app.js in its own script so existing VM extraction markers survive.
-    () => "<script>" + discoverySource + "</script><script>" + script + "</script>" +
+    () => "<script>" + discoverySource + "</script><script>" + scheduleScript + "</script><script>" + script + "</script>" +
       (discoveryScript ? "<script>" + discoveryScript + "</script>" : "") +
       "<script>" + workspaceScript + "</script><script>" + tutorialScript + "\ninitWorkspace();</script>",
   );

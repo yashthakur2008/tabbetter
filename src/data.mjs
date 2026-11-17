@@ -442,7 +442,7 @@ export function normalizeExport(raw, id) {
     city: str(raw.city),
     state: str(raw.state),
     country: str(raw.country),
-    timezone: str(raw.timezone) || "UTC",
+    timezone: str(raw.timezone),
     start: str(raw.start),
     end: str(raw.end),
     regStart: str(raw.reg_start),

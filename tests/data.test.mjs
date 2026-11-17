@@ -204,3 +204,6 @@ test('rounds preserve event type, validated person and registration IDs, and sep
   assert.ok(invalid.every(b => b.judgePersonId === ''));
   assert.ok(!JSON.stringify(round).includes('secret-event'));
 });
+test('missing tournament timezone remains unspecified rather than invented UTC', () => {
+  assert.equal(normalizeExport({id:'41209',name:'No timezone',public:'true',categories:[],schools:[]},'41209').timezone,'');
+});
