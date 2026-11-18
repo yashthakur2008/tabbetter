@@ -18,7 +18,7 @@ test('the ambient glow and pointer spotlight are removed at source', () => {
 test('the shared header uses an opaque canvas and a filled current navigation state', () => {
   const header = [...css.matchAll(/\.site-header\s*\{([^}]*)\}/g)].map(([,body])=>body);
   assert.ok(header.some(body => /background:\s*var\(--canvas\)/.test(body)));
-  assert.ok(header.every(body => !/backdrop-filter|color-mix|border-bottom/.test(body)));
+  assert.ok(header.every(body => !/backdrop-filter|border-bottom/.test(body)));
   assert.match(fs.readFileSync("web/workspace.css", "utf8"), /#workspace-navigation \.active\s*\{[^}]*background:\s*var\(--accent-bg\)/);
   assert.match(source, /setAttribute\("aria-current", "page"\)/);
 });

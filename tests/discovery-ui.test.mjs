@@ -418,3 +418,12 @@ test('metadata action visibility distinguishes idle exhaustion from busy checks 
   assert.equal(a.node('#discovery-check-next').hidden,true);
   assert.equal(a.node('#discovery-check-status').textContent,'');
 });
+
+test('event chips use known published classification and leave unknown labels neutral', () => {
+  const a=harness();
+  const html=a.run(`discoveryEventsHTML(discoverTournaments(calendar.tournaments, {'1':{status:'available',events:['OO','PF','Speech mystery','Debate mystery']}})[0],true)`);
+  assert.match(html,/class="discovery-event event-speech"[^>]*>Original Oratory/);
+  assert.match(html,/class="discovery-event event-debate"[^>]*>Public Forum/);
+  assert.match(html,/class="discovery-event"[^>]*>Speech mystery/);
+  assert.match(html,/class="discovery-event"[^>]*>Debate mystery/);
+});
