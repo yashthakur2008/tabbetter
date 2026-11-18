@@ -19,6 +19,33 @@ function externalFixture(input) {
   if(url.pathname==='/index/tourn/main.mhtml'&&record) return new Response('<h2>'+record.name+'</h2><p>Published invitation.</p>');
   return new Response('Not published',{status:404});
 }
+// Retain the independent review's all-theme and System/OS cases in CI.
+const themeCases=[
+  {theme:'light',os:'light'}, {theme:'dark',os:'light'},
+  {theme:'midnight',os:'light'}, {theme:'system',os:'light'}, {theme:'system',os:'dark'},
+];
+async function selectPersistedTheme(page,base,theme,os) {
+  await page.emulateMedia({colorScheme:os});
+  await page.goto(base+'/#settings');await page.locator('#theme').selectOption(theme);
+  await page.reload();
+  assert.equal(await page.locator('#theme').inputValue(),theme,'theme choice survives reload');
+  assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),theme==='system'?os:theme,'System resolves the current OS scheme');
+}
+async function assertThemePresentation(page) {
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'all-theme reflow');
+  const colors=await page.locator('.event-speech,.event-debate').evaluateAll(elements=>elements.slice(0,2).map(e=>{
+    const style=getComputedStyle(e);return {color:style.color,background:style.backgroundColor};
+  }));
+  assert.equal(colors.length,2,'published speech/debate chips rendered');
+  const luminance=color=>color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{
+    v/=255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4;
+  }).reduce((sum,v,i)=>sum+v*[0.2126,0.7152,0.0722][i],0);
+  for(const {color,background} of colors) {
+    const a=luminance(color),b=luminance(background);
+    assert.ok((Math.max(a,b)+0.05)/(Math.min(a,b)+0.05)>=4.5,'event chip text contrast in each theme');
+  }
+  assert.notEqual(colors[0].background,colors[1].background,'categories remain distinct in each theme');
+}
 async function metrics(page) {
   return page.evaluate(()=>{
     const rows=[...document.querySelectorAll('[data-discovery-row]')];
@@ -46,6 +73,9 @@ test(`sidebar refinement (${engine}): persistent keyboard toggle, reflow and mot
     const page=await browser.newPage({viewport:{width:1440,height:1000}});
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(base);await page.locator('[data-discovery-row]').first().waitFor();
+    const official=page.locator('#workspace-navigation a[href="https://www.tabroom.com/user/home.mhtml"]');
+    assert.equal((await official.textContent()).trim(),'Open official Tabroom','external link label does not duplicate its custom icon');
+    assert.equal(await official.locator('svg[aria-hidden="true"]').count(),1,'custom external-link icon retained');
     const toggle=page.locator('#workspace-sidebar-toggle');
     assert.equal(await toggle.count(),1,'permanent desktop header toggle exists');
     assert.equal(await toggle.getAttribute('aria-controls'),'workspace-sidebar-slot');
@@ -65,14 +95,15 @@ test(`sidebar refinement (${engine}): persistent keyboard toggle, reflow and mot
       if((await toggle.getAttribute('aria-expanded')==='false')!==hidden)await toggle.click();
       for(const width of [1440,390]) {
         await page.setViewportSize({width,height:1000});
-        for(const theme of ['light','dark']) {
-          await page.goto(base+'/#settings');await page.locator('#theme').selectOption(theme);
+        for(const {theme,os} of themeCases) {
+          await selectPersistedTheme(page,base,theme,os);
           await page.goto(base+'/#discover');await page.waitForFunction(()=>document.querySelector('#discovery-coverage')?.textContent.includes('8 of 8'));
           await page.waitForFunction(()=>document.getAnimations().every(a=>a.playState!=='running'));
-          const m=await metrics(page);evidence.push({engine,hidden,theme,textSize:'default',...m});
+          await assertThemePresentation(page);
+          const m=await metrics(page);evidence.push({engine,hidden,theme,os,textSize:'default',...m});
           assert.equal(m.documentWidth,width);if(width===1440)assert.ok(m.fullyVisible>=3,'compact default rows retained');
           assert.notEqual(await page.locator('.site-header').evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)','header has opaque canvas beneath lighting');
-          await capture(page,`sidebar-${engine}-${width}-${hidden?'hidden':'shown'}-${theme}-default`);
+          await capture(page,`sidebar-${engine}-${width}-${hidden?'hidden':'shown'}-${theme==='system'?'system-'+os:theme}-default`);
         }
       }
     }
@@ -83,7 +114,7 @@ test(`sidebar refinement (${engine}): persistent keyboard toggle, reflow and mot
     for(const hidden of [true,false]) {
       await page.setViewportSize({width:1440,height:1000});
       if((await toggle.getAttribute('aria-expanded')==='false')!==hidden) {await toggle.focus();await page.keyboard.press('Enter');}
-      for(const width of [320,390,768,1440]) {
+      for(const width of [320,390,768,901,1440]) {
         await page.setViewportSize({width,height:1000});
         await page.waitForFunction(()=>document.getAnimations().every(a=>a.playState!=='running'));
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`extra-large ${width} hidden=${hidden}`);
@@ -95,12 +126,13 @@ test(`sidebar refinement (${engine}): persistent keyboard toggle, reflow and mot
           assert.equal(await page.locator('[data-nav="settings"]').isVisible(),true,'mobile remains reachable');
           await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>document.activeElement.id),'workspace-menu');
         }
-        for(const theme of ['light','dark']) {
-          await page.goto(base+'/#settings');await page.locator('#theme').selectOption(theme);
+        for(const {theme,os} of themeCases) {
+          await selectPersistedTheme(page,base,theme,os);
           await page.goto(base+'/#discover');await page.locator('[data-discovery-row]').first().waitFor();
           await page.waitForFunction(()=>document.getAnimations().every(a=>a.playState!=='running'));
-          evidence.push({engine,hidden,theme,textSize:'extra-large',...(await metrics(page))});
-          await capture(page,`sidebar-${engine}-${width}-${hidden?'hidden':'shown'}-${theme}`);
+          await assertThemePresentation(page);
+          evidence.push({engine,hidden,theme,os,textSize:'extra-large',...(await metrics(page))});
+          await capture(page,`sidebar-${engine}-${width}-${hidden?'hidden':'shown'}-${theme==='system'?'system-'+os:theme}`);
         }
       }
     }
