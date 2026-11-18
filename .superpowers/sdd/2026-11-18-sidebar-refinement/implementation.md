@@ -112,3 +112,30 @@ Firefox has the same row sizes with approximately 0.02px top rounding difference
 - New deterministic sidebar tests establish app behavior, not current upstream tournament availability. Separate legacy live suites read current public data. The member suite observes the official unauthenticated login redirect, not authenticated paradigm contents.
 - Theme-aware lighting follows the existing accent in Midnight rather than overriding the user's palette. The existing readable content max-width is intentionally retained.
 - Review and release remain outstanding by ownership, not an implementation blocker. No deploy or public-site change occurred.
+
+## Independent-review nit closeout
+
+Coordinator-authorized narrow follow-up to `review.md`. **Follow-up implementation/test commit: `687feb9`**. Only `web/index.html` and `tests/sidebar-browser.test.mjs` changed before this report appendix.
+
+1. Removed the redundant trailing `↗` from the official Tabroom navigation label. The leading custom SVG remains decorative, the label remains **Open official Tabroom**, and the exact destination/target/rel are unchanged. New compiled-browser assertions check the destination-selected anchor's plain label and the retained single SVG. Before the change, `review-label-red.log` failed with actual `Open official Tabroom ↗` versus expected `Open official Tabroom`. Afterward it passed. The actual Midnight desktop screenshot was inspected and the orphan arrow is gone.
+2. Retained the independent review's previously supplemental all-theme checks in the maintained sidebar suite. Cases now include Light, Dark, Midnight, System/light OS and System/dark OS. Each uses the real Settings selector, reloads, verifies persisted selection and resolved effective theme, then checks actual discovery reflow, distinct event-chip colors and at least 4.5:1 chip text contrast. The 901px desktop breakpoint is included alongside 320/390/768/1440 for extra-large text. Default text retains 390/1440. Both sidebar preferences are exercised throughout. **No theme defect or invented red is claimed:** these existing all-theme behaviors passed immediately, consistent with independent supplemental findings.
+
+Fresh verification of `687feb9` contents:
+
+| Check | Result | Evidence |
+|---|---|---|
+| Full build/test with Chromium browser opt-in | **361 passed, 0 failed, 0 skipped** | `review-followup-full.log` |
+| All compiled Firefox browser suites | **10 passed, 0 failed, 0 skipped** | `review-followup-firefox.log` |
+| All compiled WebKit browser suites | **10 passed, 0 failed, 0 skipped** | `review-followup-webkit.log` |
+| Focused Chromium follow-up | Passed | `review-followup-green.log` |
+| Hygiene/syntax, artifact validation, whitespace | Passed | task output / `git diff --check` |
+
+The same commands/environment documented above were used for full and browser suites. The legacy live suites were not rerun for this label-only production change; their preceding final and independent-review passes remain documented above. No schedule/API/theme production code was changed.
+
+The existing evidence root now contains **70 samples per engine, 210 total**, with **zero horizontal overflows**. `sidebar-{engine}-metrics.json` adds an `os` field. Screenshot names retain the previous light/dark names and add `midnight`, `system-light`, and `system-dark`. Examples:
+
+- `sidebar-chromium-1440-shown-midnight-default.png` (manually inspected corrected single external indicator)
+- `sidebar-firefox-901-shown-system-dark.png`
+- `sidebar-webkit-320-hidden-system-light.png`
+
+This supersedes the earlier 24-sample/light-dark-only maintained coverage description. Previous behavior, security and release boundaries are unchanged. Ready for reviewer closeout and coordinator release decision.
