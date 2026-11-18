@@ -87,7 +87,7 @@ function discoveryDistance(t) {
 }
 function discoveryEventsHTML(t, expanded = false) {
   const events = t.discovery.events;
-  const label = e => '<span class="discovery-event' + (discoveryState.eventIds.includes(e.id) ? ' is-match' : '') + '" title="Published as: ' + attr(e.sourceLabel) + '">' + esc(e.label) + '</span>';
+  const label = e => '<span class="discovery-event' + (['speech', 'debate'].includes(e.group) ? ' event-' + e.group : '') + (discoveryState.eventIds.includes(e.id) ? ' is-match' : '') + '" title="Published as: ' + attr(e.sourceLabel) + '">' + esc(e.label) + '</span>';
   if (!events.length) return '<span class="discovery-hint">' + esc(discoveryStatus(t)) + '</span>';
   return events.slice(0, expanded ? events.length : 4).map(label).join(' ') + (!expanded && events.length > 4 ? '<details class="discovery-event-overflow"><summary>+' + (events.length - 4) + ' more</summary>' + events.slice(4).map(label).join(' ') + '</details>' : '');
 }
@@ -412,6 +412,11 @@ function discoverySave(id) {
     button.textContent = isSaved(id) ? 'Saved' : 'Save';
     button.setAttribute('aria-pressed',String(isSaved(id)));
     button.setAttribute('aria-label',(isSaved(id)?'Unsave ':'Save ')+t.name);
+    // Persistence and accessible state happen first. Motion is only feedback.
+    button.getAnimations?.().forEach(animation => animation.cancel());
+    if (isSaved(id) && document.documentElement.dataset.motion !== 'reduce' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && button.animate) {
+      button.animate([{transform:'scale(1)'},{transform:'scale(1.07)',offset:0.4},{transform:'scale(1)'}], {duration:280,easing:'ease-out'});
+    }
   }
   if (route().name === 'saved') discoveryDrawResults();
 }

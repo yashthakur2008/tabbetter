@@ -1,17 +1,22 @@
-/* Workspace geometry only. Competition density and branding are separate work. */
+/* Workspace frame and navigation. Discovery owns its compact rows. */
 :root { --workspace-sidebar-width: 240px; --workspace-header-height: 4.5rem; }
 :root[data-text-size="large"] { font-size: 125%; }
 :root[data-text-size="extra-large"] { font-size: 150%; }
 [hidden] { display: none !important; }
-body { display: grid; grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr); }
+body { display: grid; grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr); transition: grid-template-columns 220ms ease; }
+:root[data-sidebar-hidden="true"] body { grid-template-columns: 0px minmax(0, 1fr); }
 .site-header { grid-column: 1 / -1; height: var(--workspace-header-height); border-bottom: 1px solid var(--border); }
 #crumb { color: var(--muted); font-size: .875rem; overflow-wrap: anywhere; }
+#workspace-sidebar-toggle { margin-left: auto; gap: 8px; flex-shrink: 0; }
+#workspace-sidebar-toggle svg, .workspace-icon { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.workspace-icon { width: 20px; height: 20px; flex: 0 0 20px; }
 #workspace-menu { display: none; margin-left: auto; }
-#workspace-sidebar-slot { position: sticky; top: var(--workspace-header-height); align-self: start; height: calc(100dvh - var(--workspace-header-height)); width: var(--workspace-sidebar-width); background: var(--canvas); border-right: 1px solid var(--border); overflow-y: auto; }
+#workspace-sidebar-slot { position: sticky; top: var(--workspace-header-height); align-self: start; height: calc(100dvh - var(--workspace-header-height)); width: var(--workspace-sidebar-width); background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 5%, var(--canvas)), var(--canvas) 65%); transition: opacity 180ms ease, visibility 220ms; border-right: 1px solid var(--border); overflow-y: auto; }
+:root[data-sidebar-hidden="true"] #workspace-sidebar-slot { opacity: 0; visibility: hidden; pointer-events: none; }
 #workspace-navigation { display: flex; flex-direction: column; gap: 16px; height: 100%; min-height: 0; padding: 16px; }
 .workspace-primary, .workspace-settings-link { flex-shrink: 0; }
 .workspace-secondary { flex: 1; min-height: 0; overflow-y: auto; }
-#workspace-navigation button, #workspace-navigation a { display: block; width: 100%; text-align: left; border: 0; border-radius: 6px; padding: 10px 12px; min-height: 44px; background: transparent; color: var(--text); font-size: .875rem; white-space: normal; overflow-wrap: anywhere; }
+#workspace-navigation button, #workspace-navigation a { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; border-radius: 6px; padding: 10px 12px; min-height: 44px; background: transparent; color: var(--text); font-size: .875rem; font-weight: 550; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
 #workspace-navigation button:hover, #workspace-navigation a:hover, #workspace-navigation .active { background: var(--accent-bg); color: var(--accent); }
 #workspace-navigation .workspace-settings-link { margin-top: auto; border-top: 1px solid var(--border); border-radius: 0; }
 .workspace-nav-label { margin: 8px 12px; font-size: .75rem; font-weight: 650; color: var(--muted); }
@@ -55,6 +60,7 @@ main { grid-column: 2; margin: 0; }
   .site-header { height: auto; position: relative; }
   #workspace-sidebar-slot { display: none; }
   #workspace-menu { display: block; }
+  #workspace-sidebar-toggle { display: none; }
   .site-header-inner { flex-wrap: wrap; gap: 10px; }
   #crumb { order: 3; flex-basis: 100%; }
   main { margin-left: 0; }
@@ -63,6 +69,6 @@ main { grid-column: 2; margin: 0; }
 @media print {
   body { display: block; }
   .site-header { height: auto; position: relative; }
-  #workspace-sidebar-slot, #workspace-drawer, #tutorial-welcome, #tutorial-dialog { display: none !important; }
+  #workspace-sidebar-toggle, #workspace-menu, #workspace-sidebar-slot, #workspace-drawer, #tutorial-welcome, #tutorial-dialog { display: none !important; }
   main { margin: 0; }
 }

@@ -184,3 +184,14 @@ test(`compiled workspace (${engineName}): malformed preferences recover truthful
   assert.equal(await page.locator('#workspace-text-size').inputValue(),'large');
   assert.match(await page.locator('#workspace-persistence').textContent(),/Saved locally/);
 }));
+
+for (const focused of ['#workspace-sidebar-toggle','[data-nav="saved"]']) {
+  test(`compiled workspace (${engineName}): mobile resize restores visible focus from ${focused}`, {skip:!modulePath}, ()=>withCompiledBrowser(async(browser,base)=>{
+    const page=await browser.newPage({viewport:{width:1440,height:1000}});
+    await page.goto(base+'/#settings');await page.locator(focused).focus();
+    await page.setViewportSize({width:390,height:844});
+    await page.waitForFunction(()=>document.activeElement.id==='workspace-menu',{},{timeout:3000});
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'workspace-menu','breakpoint must not leave focus in hidden desktop chrome');
+    await page.keyboard.press('Enter');assert.equal(await page.locator('#workspace-drawer').isVisible(),true);
+  }));
+}

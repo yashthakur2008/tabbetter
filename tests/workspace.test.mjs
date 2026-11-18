@@ -88,3 +88,22 @@ test('getItem rejection and setItem rejection are independent of malformed data 
   const reloaded=context.createWorkspacePreferences(storage).get();
   assert.equal(reloaded.textSize,'extra-large');assert.equal(reloaded.motion,'reduce');
 });
+
+test('desktop sidebar defaults visible and accepts only persisted booleans', () => {
+  for (const raw of [undefined,'broken','{"version":1,"sidebarHidden":"true"}','{"version":2,"sidebarHidden":true}']) {
+    assert.equal(preferences(raw).prefs.get().sidebarHidden,false);
+  }
+  const {prefs,storage,context}=preferences();
+  for (const hidden of [true,false]) {
+    prefs.update({sidebarHidden:hidden});
+    assert.equal(context.createWorkspacePreferences(storage).get().sidebarHidden,hidden);
+  }
+  prefs.update({sidebarHidden:true});prefs.update({sidebarHidden:0});
+  assert.equal(prefs.get().sidebarHidden,true);
+});
+test('blocked storage keeps desktop sidebar choice within the session', () => {
+  const {prefs}=preferences(null,true);
+  prefs.update({sidebarHidden:true});
+  assert.equal(prefs.get().sidebarHidden,true);
+  assert.equal(prefs.persistent(),false);
+});

@@ -1,11 +1,12 @@
 // Versioned local preferences. Theme intentionally retains tabbetter-theme.
 function createWorkspacePreferences(storage) {
-  const state = {version: 1, textSize: "default", motion: "device", tutorialEnabled: true, dismissedVersion: 0, completedVersion: 0};
+  const state = {version: 1, sidebarHidden: false, textSize: "default", motion: "device", tutorialEnabled: true, dismissedVersion: 0, completedVersion: 0};
   let persistent = true;
   function accept(value) {
     if (!value || typeof value !== "object" || Array.isArray(value)) return;
     if (["default", "large", "extra-large"].includes(value.textSize)) state.textSize = value.textSize;
     if (["device", "reduce"].includes(value.motion)) state.motion = value.motion;
+    if (typeof value.sidebarHidden === "boolean") state.sidebarHidden = value.sidebarHidden;
     if (typeof value.tutorialEnabled === "boolean") state.tutorialEnabled = value.tutorialEnabled;
     for (const key of ["dismissedVersion", "completedVersion"]) if ([0, 1].includes(value[key])) state[key] = value[key];
   }
@@ -42,6 +43,17 @@ function applyWorkspacePreferences() {
   document.documentElement.dataset.motion = reduce ? "reduce" : "device";
   // CSS cannot cancel an already running Web Animations API animation.
   if (reduce) document.getAnimations().forEach(animation => animation.cancel());
+}
+function applyWorkspaceSidebar() {
+  const hidden = workspacePreferences.get().sidebarHidden;
+  const desktop = window.matchMedia("(min-width: 901px)").matches;
+  const slot = $("#workspace-sidebar-slot");
+  const toggle = $("#workspace-sidebar-toggle");
+  document.documentElement.dataset.sidebarHidden = String(hidden);
+  slot.inert = desktop && hidden;
+  toggle.setAttribute("aria-expanded", String(!hidden));
+  toggle.setAttribute("aria-label", hidden ? "Show sidebar" : "Hide sidebar");
+  if (desktop && hidden && slot.contains(document.activeElement)) toggle.focus();
 }
 function renderWorkspaceSettings() {
   if (!workspacePreferences) return;
@@ -106,7 +118,7 @@ function workspaceDialogKeydown(event) {
   if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey) return;
   const dialog = event.currentTarget;
   const controls = [...dialog.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex="0"]')]
-    .filter(control => !control.matches(":disabled") && control.tabIndex >= 0 && control.getClientRects().length && !control.closest("[hidden]"));
+    .filter(control => !control.matches(":disabled") && control.tabIndex >= 0 && control.getClientRects().length && !control.closest("[hidden], [inert]"));
   const index = controls.indexOf(document.activeElement);
   const next = event.shiftKey
     ? (index <= 0 ? controls.length - 1 : index - 1)
@@ -125,8 +137,9 @@ function closeWorkspaceDrawer() {
   menu.setAttribute("aria-expanded", "false");
   // A breakpoint change hides Menu. Preserve a focused destination if possible,
   // otherwise restore the opener or a meaningful visible desktop destination.
-  const target = [focused, menu, navigation.querySelector('[aria-current="page"]'), $("#app")]
-    .find(control => control?.isConnected && control.getClientRects().length && !control.closest("[hidden]"));
+  applyWorkspaceSidebar();
+  const target = [focused, menu, (workspacePreferences.get().sidebarHidden ? $("#workspace-sidebar-toggle") : null), navigation.querySelector('[aria-current="page"]'), $("#app")]
+    .find(control => control?.isConnected && control.getClientRects().length && !control.closest("[hidden], [inert]"));
   target?.focus();
 }
 function workspaceRouteChanged() {
@@ -151,6 +164,11 @@ function initWorkspace() {
   workspaceMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
   workspaceMotionMedia.addEventListener("change", applyWorkspacePreferences);
   applyWorkspacePreferences();
+  applyWorkspaceSidebar();
+  $("#workspace-sidebar-toggle").onclick = () => {
+    workspacePreferences.update({sidebarHidden: !workspacePreferences.get().sidebarHidden});
+    applyWorkspaceSidebar();
+  };
   const drawer = $("#workspace-drawer");
   $("#workspace-menu").onclick = () => {
     drawer.append($("#workspace-navigation"));
@@ -166,7 +184,19 @@ function initWorkspace() {
   $("#workspace-navigation").addEventListener("click", event => {
     if (event.target.closest("[data-nav], a")) closeWorkspaceDrawer();
   });
-  window.matchMedia("(min-width: 901px)").addEventListener("change", event => { if (event.matches) closeWorkspaceDrawer(); });
+  // Some engines blur display:none controls before firing the media change.
+  // Transfer only that breakpoint blur, never an ordinary pointer blur.
+  document.addEventListener("focusout", event => {
+    if (!window.matchMedia("(min-width: 901px)").matches &&
+        (event.target === $("#workspace-sidebar-toggle") || $("#workspace-sidebar-slot").contains(event.target))) {
+      queueMicrotask(() => { if (document.activeElement === document.body) $("#workspace-menu").focus(); });
+    }
+  });
+  window.matchMedia("(min-width: 901px)").addEventListener("change", event => {
+    if (event.matches) closeWorkspaceDrawer();
+    else if (document.activeElement === $("#workspace-sidebar-toggle") || $("#workspace-sidebar-slot").contains(document.activeElement)) $("#workspace-menu").focus();
+    applyWorkspaceSidebar();
+  });
   initTutorial();
   if (route().name === "settings") renderRoute();
 }
